@@ -16,8 +16,9 @@ API_BASE = "https://smsbower.page/stubs/handler_api.php"
 DB_PATH = os.environ.get("DB_PATH", "database.db")
 
 MAX_ORDER = 20         # Maksimal order sekaligus
-OTP_TIMEOUT = 300      # Timeout 5 menit (300 detik)
+OTP_TIMEOUT = 1500     # Timeout 25 menit (1500 detik)
 CHECK_INTERVAL = 5     # Cek OTP setiap 5 detik
+CANCEL_DELAY = 120     # Baru bisa cancel setelah 2 menit (120 detik)
 COUNTRY_CODE = "84"    # Vietnam country code
 COUNTRY_ID = "10"      # Vietnam country ID di SMSBower
 SERVICE = "wa"         # WhatsApp service
@@ -83,22 +84,28 @@ def format_order_message(orders, title=""):
 
     done_count = 0
     total = len(orders)
+    now = time.time()
 
     for i, order in enumerate(orders, 1):
         number_local = strip_country_code(order['number'])
         status = order.get('status', 'waiting')
 
         if status == 'waiting':
-            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP...")
+            # Hitung sisa waktu
+            elapsed = now - order.get('order_time', now)
+            remaining = max(0, OTP_TIMEOUT - elapsed)
+            mins = int(remaining // 60)
+            secs = int(remaining % 60)
+            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... ({mins}m {secs}s)")
         elif status == 'got_otp':
             code = order.get('code', '???')
             lines.append(f"{i}. `{number_local}` — ✅ OTP: `{code}`")
             done_count += 1
         elif status == 'cancelled':
-            lines.append(f"{i}. `{number_local}` — 🚫 Dibatalkan")
+            lines.append(f"{i}. `{number_local}` — 🚫 Dibatalkan (Refund)")
             done_count += 1
         elif status == 'timeout':
-            lines.append(f"{i}. `{number_local}` — ⏰ Timeout")
+            lines.append(f"{i}. `{number_local}` — ⏰ Timeout (25 menit)")
             done_count += 1
         elif status == 'error':
             lines.append(f"{i}. `{number_local}` — ❌ Error")
@@ -118,6 +125,7 @@ def format_order_message(orders, title=""):
 def auto_check_otp(chat_id, message_id, orders, api_key):
     """Background thread yang otomatis cek OTP untuk semua order"""
     start_time = time.time()
+    last_update_text = ""
 
     while True:
         # Cek apakah semua order sudah selesai
@@ -125,19 +133,17 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
         if not active_orders:
             break
 
-        # Cek timeout
+        # Cek timeout (25 menit)
         elapsed = time.time() - start_time
         if elapsed > OTP_TIMEOUT:
             # Timeout semua yang masih waiting
             for o in orders:
                 if o['status'] == 'waiting':
                     o['status'] = 'timeout'
-                    # Cancel di API (status 8 = cancel)
                     try:
                         req_api(api_key, 'setStatus', status='8', id=o['id'])
                     except:
                         pass
-            # Update pesan terakhir
             try:
                 text = format_order_message(orders, "🛒 *Order WA Vietnam*")
                 bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown")
@@ -157,30 +163,40 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
                     o['status'] = 'got_otp'
                     o['code'] = code
                     changed = True
-                    # Set status 6 (selesai) di API
                     req_api(api_key, 'setStatus', status='6', id=o['id'])
                 elif res == 'STATUS_CANCEL':
                     o['status'] = 'cancelled'
                     changed = True
-                # STATUS_WAIT_CODE = masih menunggu, lanjut
             except:
                 pass
 
-        # Update pesan jika ada perubahan
-        if changed:
-            try:
-                text = format_order_message(orders, "🛒 *Order WA Vietnam*")
-                # Tambah tombol cancel jika masih ada yang waiting
-                remaining = [o for o in orders if o['status'] == 'waiting']
-                if remaining:
-                    markup = InlineKeyboardMarkup()
+        # Update pesan (selalu update untuk countdown timer)
+        try:
+            text = format_order_message(orders, "🛒 *Order WA Vietnam*")
+            remaining = [o for o in orders if o['status'] == 'waiting']
+
+            if remaining:
+                markup = InlineKeyboardMarkup()
+                # Cek apakah sudah lewat 2 menit → baru tampilkan tombol cancel
+                oldest_order_time = min(o.get('order_time', time.time()) for o in remaining)
+                can_cancel = (time.time() - oldest_order_time) >= CANCEL_DELAY
+
+                if can_cancel:
                     ids_str = ",".join([o['id'] for o in remaining])
                     markup.row(InlineKeyboardButton(f"🚫 Batalkan Sisa ({len(remaining)})", callback_data=f"cancelall_{ids_str}"))
-                    bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown", reply_markup=markup)
                 else:
-                    bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown")
-            except:
-                pass
+                    wait_left = int(CANCEL_DELAY - (time.time() - oldest_order_time))
+                    markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia dalam {wait_left}s", callback_data="cancel_wait"))
+
+                # Hanya edit jika text berubah (hemat API)
+                if text != last_update_text or changed or can_cancel:
+                    bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown", reply_markup=markup)
+                    last_update_text = text
+            else:
+                bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown")
+                last_update_text = text
+        except:
+            pass
 
         time.sleep(CHECK_INTERVAL)
 
@@ -233,7 +249,8 @@ def help_cmd(message):
         "3️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
         "4️⃣ Salin nomor (tanpa +84) langsung dari chat.\n\n"
-        "⏱ Timeout: 5 menit per order\n"
+        "⏱ Timeout: 25 menit per order\n"
+        "🚫 Cancel: tersedia setelah 2 menit\n"
         "📱 Maks order: 20 nomor sekaligus\n\n"
         "💰 Cek saldo: `/balance`"
     )
@@ -314,7 +331,8 @@ def process_bulk_order(chat_id, api_key, count):
                     'id': t_id,
                     'number': number,
                     'status': 'waiting',
-                    'code': None
+                    'code': None,
+                    'order_time': time.time()
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
@@ -344,8 +362,8 @@ def process_bulk_order(chat_id, api_key, count):
     text = format_order_message(orders, "🛒 *Order WA Vietnam*")
 
     markup = InlineKeyboardMarkup()
-    ids_str = ",".join([o['id'] for o in orders])
-    markup.row(InlineKeyboardButton(f"🚫 Batalkan Semua ({len(orders)})", callback_data=f"cancelall_{ids_str}"))
+    # Tombol cancel belum bisa dipencet, harus tunggu 2 menit
+    markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia dalam {CANCEL_DELAY}s", callback_data="cancel_wait"))
 
     bot.edit_message_text(text, chat_id, msg.message_id, parse_mode="Markdown", reply_markup=markup)
 
@@ -376,25 +394,33 @@ def callback_q(call):
         bot.answer_callback_query(call.id, f"Memesan {count} nomor...")
         process_bulk_order(call.message.chat.id, api_key, count)
 
-    # Cancel all remaining orders
+    # Tombol cancel belum tersedia (belum 2 menit)
+    elif data == "cancel_wait":
+        bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
+
+    # Cancel all remaining orders (sudah lewat 2 menit)
     elif data.startswith("cancelall_"):
         ids_str = data.split("_", 1)[1]
         ids_list = ids_str.split(",")
         cancelled = 0
+        failed_cancel = 0
         for t_id in ids_list:
             try:
                 res = req_api(api_key, 'setStatus', status='8', id=t_id)
                 if 'ACCESS_CANCEL' in res:
                     cancelled += 1
+                else:
+                    failed_cancel += 1
             except:
-                pass
-        bot.answer_callback_query(call.id, f"🚫 {cancelled} order dibatalkan & direfund.", show_alert=True)
+                failed_cancel += 1
+
+        result_text = f"🚫 *{cancelled} order dibatalkan.*\nSaldo dikembalikan."
+        if failed_cancel > 0:
+            result_text += f"\n⚠️ {failed_cancel} gagal dibatalkan (mungkin sudah expired atau sudah diproses)."
+
+        bot.answer_callback_query(call.id, f"🚫 {cancelled} dibatalkan, {failed_cancel} gagal.", show_alert=True)
         try:
-            bot.edit_message_text(
-                f"🚫 *{cancelled} order dibatalkan.*\nSaldo dikembalikan.",
-                call.message.chat.id, call.message.message_id,
-                parse_mode="Markdown"
-            )
+            bot.edit_message_text(result_text, call.message.chat.id, call.message.message_id, parse_mode="Markdown")
         except:
             pass
 
