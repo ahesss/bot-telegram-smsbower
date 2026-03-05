@@ -95,12 +95,11 @@ def format_order_message(orders, title=""):
         status = order.get('status', 'waiting')
 
         if status == 'waiting':
-            # Hitung sisa waktu
+            # Hitung sisa waktu (dalam menit saja, tanpa detik)
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
-            secs = int(remaining % 60)
-            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... ({mins}m {secs}s)")
+            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... (~{mins} menit)")
         elif status == 'got_otp':
             code = order.get('code', '???')
             lines.append(f"{i}. `{number_local}` — ✅ OTP: `{code}`")
@@ -123,86 +122,141 @@ def format_order_message(orders, title=""):
 
     return "\n".join(lines)
 
+def safe_edit_message(text, chat_id, message_id, markup=None):
+    """Edit pesan dengan handling rate limit dan error"""
+    try:
+        if markup:
+            bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown", reply_markup=markup)
+        else:
+            bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown")
+        return True
+    except Exception as e:
+        err_str = str(e).lower()
+        if "retry after" in err_str or "too many requests" in err_str:
+            # Rate limited, tunggu 5 detik
+            time.sleep(5)
+        elif "message is not modified" in err_str:
+            # Pesan sama persis, abaikan
+            pass
+        else:
+            print(f"Edit message error: {e}")
+        return False
+
 # =============================================
 # AUTO-CHECK OTP (BACKGROUND THREAD)
 # =============================================
 def auto_check_otp(chat_id, message_id, orders, api_key):
     """Background thread yang otomatis cek OTP untuk semua order"""
     start_time = time.time()
-    last_update_text = ""
+    last_edit_time = 0       # Kapan terakhir edit pesan
+    EDIT_COOLDOWN = 3        # Minimal 3 detik antar edit pesan
+    TIMER_UPDATE = 60        # Update tampilan timer setiap 60 detik
+    last_timer_update = 0    # Kapan terakhir update timer
 
-    while True:
-        # Cek apakah semua order sudah selesai
-        active_orders = [o for o in orders if o['status'] == 'waiting']
-        if not active_orders:
-            break
+    try:
+        while True:
+            # Cek apakah semua order sudah selesai
+            waiting_orders = [o for o in orders if o['status'] == 'waiting']
+            if not waiting_orders:
+                # Final update
+                text = format_order_message(orders, "🛒 *Order WA Vietnam — Selesai*")
+                safe_edit_message(text, chat_id, message_id)
+                break
 
-        # Cek timeout (25 menit)
-        elapsed = time.time() - start_time
-        if elapsed > OTP_TIMEOUT:
-            # Timeout semua yang masih waiting
+            # Cek timeout (25 menit)
+            elapsed = time.time() - start_time
+            if elapsed > OTP_TIMEOUT:
+                for o in orders:
+                    if o['status'] == 'waiting':
+                        o['status'] = 'timeout'
+                        try:
+                            req_api(api_key, 'setStatus', status='8', id=o['id'])
+                        except:
+                            pass
+                        time.sleep(0.5)  # Jeda antar API call
+                text = format_order_message(orders, "🛒 *Order WA Vietnam — Timeout*")
+                safe_edit_message(text, chat_id, message_id)
+                break
+
+            # Cek SMS untuk setiap order yang masih waiting
+            changed = False
             for o in orders:
-                if o['status'] == 'waiting':
-                    o['status'] = 'timeout'
-                    try:
-                        req_api(api_key, 'setStatus', status='8', id=o['id'])
-                    except:
-                        pass
-            try:
+                if o['status'] != 'waiting':
+                    continue
+                try:
+                    res = req_api(api_key, 'getStatus', id=o['id'])
+                    if res.startswith('STATUS_OK'):
+                        code = res.split(':')[1] if ':' in res else '???'
+                        o['status'] = 'got_otp'
+                        o['code'] = code
+                        changed = True
+                        try:
+                            req_api(api_key, 'setStatus', status='6', id=o['id'])
+                        except:
+                            pass
+                    elif res == 'STATUS_CANCEL':
+                        o['status'] = 'cancelled'
+                        changed = True
+                except:
+                    pass
+                time.sleep(0.3)  # Jeda antar cek per nomor agar tidak flood API
+
+            now = time.time()
+
+            # Update pesan HANYA jika:
+            # 1. Ada OTP baru masuk (changed = True), ATAU
+            # 2. Sudah 60 detik sejak update timer terakhir
+            should_update = changed or (now - last_timer_update >= TIMER_UPDATE)
+
+            # Pastikan cooldown antar edit minimal 3 detik
+            if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
+                remaining = [o for o in orders if o['status'] == 'waiting']
                 text = format_order_message(orders, "🛒 *Order WA Vietnam*")
-                bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown")
-            except:
-                pass
-            break
 
-        # Cek SMS untuk setiap order yang masih waiting
-        changed = False
-        for o in orders:
-            if o['status'] != 'waiting':
-                continue
-            try:
-                res = req_api(api_key, 'getStatus', id=o['id'])
-                if res.startswith('STATUS_OK'):
-                    code = res.split(':')[1] if ':' in res else '???'
-                    o['status'] = 'got_otp'
-                    o['code'] = code
-                    changed = True
-                    req_api(api_key, 'setStatus', status='6', id=o['id'])
-                elif res == 'STATUS_CANCEL':
-                    o['status'] = 'cancelled'
-                    changed = True
-            except:
-                pass
+                if remaining:
+                    markup = InlineKeyboardMarkup()
+                    oldest_order_time = min(o.get('order_time', now) for o in remaining)
+                    can_cancel = (now - oldest_order_time) >= CANCEL_DELAY
 
-        # Update pesan (selalu update untuk countdown timer)
-        try:
-            text = format_order_message(orders, "🛒 *Order WA Vietnam*")
-            remaining = [o for o in orders if o['status'] == 'waiting']
+                    if can_cancel:
+                        ids_str = ",".join([o['id'] for o in remaining])
+                        markup.row(InlineKeyboardButton(
+                            f"🚫 Batalkan Sisa ({len(remaining)})",
+                            callback_data=f"cancelall_{ids_str}"
+                        ))
+                    else:
+                        wait_mins = int((CANCEL_DELAY - (now - oldest_order_time)) / 60) + 1
+                        markup.row(InlineKeyboardButton(
+                            f"⏳ Cancel tersedia ~{wait_mins} menit lagi",
+                            callback_data="cancel_wait"
+                        ))
 
-            if remaining:
-                markup = InlineKeyboardMarkup()
-                # Cek apakah sudah lewat 2 menit → baru tampilkan tombol cancel
-                oldest_order_time = min(o.get('order_time', time.time()) for o in remaining)
-                can_cancel = (time.time() - oldest_order_time) >= CANCEL_DELAY
-
-                if can_cancel:
-                    ids_str = ",".join([o['id'] for o in remaining])
-                    markup.row(InlineKeyboardButton(f"🚫 Batalkan Sisa ({len(remaining)})", callback_data=f"cancelall_{ids_str}"))
+                    if safe_edit_message(text, chat_id, message_id, markup):
+                        last_edit_time = now
+                        last_timer_update = now
                 else:
-                    wait_left = int(CANCEL_DELAY - (time.time() - oldest_order_time))
-                    markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia dalam {wait_left}s", callback_data="cancel_wait"))
+                    if safe_edit_message(text, chat_id, message_id):
+                        last_edit_time = now
+                        last_timer_update = now
 
-                # Hanya edit jika text berubah (hemat API)
-                if text != last_update_text or changed or can_cancel:
-                    bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown", reply_markup=markup)
-                    last_update_text = text
-            else:
-                bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown")
-                last_update_text = text
+            time.sleep(CHECK_INTERVAL)
+
+    except Exception as e:
+        print(f"Auto-check OTP thread error: {e}")
+        # Tetap coba update pesan terakhir
+        try:
+            text = format_order_message(orders, "🛒 *Order WA Vietnam — Error*")
+            text += f"\n\n⚠️ Bot error: cek ulang dengan /start"
+            safe_edit_message(text, chat_id, message_id)
         except:
             pass
-
-        time.sleep(CHECK_INTERVAL)
+    finally:
+        # Cleanup active_orders
+        try:
+            if chat_id in active_orders and message_id in active_orders[chat_id]:
+                del active_orders[chat_id][message_id]
+        except:
+            pass
 
 # =============================================
 # COMMAND HANDLERS
