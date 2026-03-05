@@ -23,6 +23,10 @@ COUNTRY_CODE = "84"    # Vietnam country code
 COUNTRY_ID = "10"      # Vietnam country ID di SMSBower
 SERVICE = "wa"         # WhatsApp service
 
+# Menyimpan data order aktif per chat_id agar callback bisa akses
+# Format: { chat_id: { message_id: [orders_list] } }
+active_orders = {}
+
 # =============================================
 # DATABASE
 # =============================================
@@ -367,6 +371,11 @@ def process_bulk_order(chat_id, api_key, count):
 
     bot.edit_message_text(text, chat_id, msg.message_id, parse_mode="Markdown", reply_markup=markup)
 
+    # Simpan referensi orders ke global agar callback bisa akses
+    if chat_id not in active_orders:
+        active_orders[chat_id] = {}
+    active_orders[chat_id][msg.message_id] = orders
+
     # Mulai auto-check OTP di background thread
     thread = threading.Thread(
         target=auto_check_otp,
@@ -404,23 +413,42 @@ def callback_q(call):
         ids_list = ids_str.split(",")
         cancelled = 0
         failed_cancel = 0
+
+        # Cari data orders dari active_orders
+        chat_id = call.message.chat.id
+        msg_id = call.message.message_id
+        orders_ref = None
+        if chat_id in active_orders and msg_id in active_orders[chat_id]:
+            orders_ref = active_orders[chat_id][msg_id]
+
         for t_id in ids_list:
             try:
                 res = req_api(api_key, 'setStatus', status='8', id=t_id)
                 if 'ACCESS_CANCEL' in res:
                     cancelled += 1
+                    # Update status di orders_ref
+                    if orders_ref:
+                        for o in orders_ref:
+                            if o['id'] == t_id and o['status'] == 'waiting':
+                                o['status'] = 'cancelled'
                 else:
                     failed_cancel += 1
             except:
                 failed_cancel += 1
 
-        result_text = f"🚫 *{cancelled} order dibatalkan.*\nSaldo dikembalikan."
-        if failed_cancel > 0:
-            result_text += f"\n⚠️ {failed_cancel} gagal dibatalkan (mungkin sudah expired atau sudah diproses)."
-
         bot.answer_callback_query(call.id, f"🚫 {cancelled} dibatalkan, {failed_cancel} gagal.", show_alert=True)
+
+        # Tampilkan ulang daftar lengkap (OTP yang sudah masuk tetap terlihat)
         try:
-            bot.edit_message_text(result_text, call.message.chat.id, call.message.message_id, parse_mode="Markdown")
+            if orders_ref:
+                # Tandai sisa yang masih waiting sebagai cancelled juga jika API gagal
+                text = format_order_message(orders_ref, "🛒 *Order WA Vietnam — Selesai*")
+                bot.edit_message_text(text, chat_id, msg_id, parse_mode="Markdown")
+            else:
+                result_text = f"🚫 *{cancelled} order dibatalkan.*\nSaldo dikembalikan."
+                if failed_cancel > 0:
+                    result_text += f"\n⚠️ {failed_cancel} gagal dibatalkan."
+                bot.edit_message_text(result_text, chat_id, msg_id, parse_mode="Markdown")
         except:
             pass
 
