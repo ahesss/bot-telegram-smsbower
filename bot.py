@@ -95,11 +95,12 @@ def format_order_message(orders, title=""):
         status = order.get('status', 'waiting')
 
         if status == 'waiting':
-            # Hitung sisa waktu (dalam menit saja, tanpa detik)
+            # Hitung sisa waktu
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
-            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... (~{mins} menit)")
+            secs = int(remaining % 60)
+            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... ({mins}m {secs}s)")
         elif status == 'got_otp':
             code = order.get('code', '???')
             lines.append(f"{i}. `{number_local}` — ✅ OTP: `{code}`")
@@ -150,7 +151,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
     start_time = time.time()
     last_edit_time = 0       # Kapan terakhir edit pesan
     EDIT_COOLDOWN = 3        # Minimal 3 detik antar edit pesan
-    TIMER_UPDATE = 60        # Update tampilan timer setiap 60 detik
+    TIMER_UPDATE = 15        # Update tampilan timer setiap 15 detik
     last_timer_update = 0    # Kapan terakhir update timer
 
     try:
