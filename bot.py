@@ -33,6 +33,7 @@ COUNTRIES = {
         "flag": "🇻🇳",
         "country_id": "10",
         "country_code": "84",
+        "maxPrice": "0.238",
     },
     "colombia": {
         "name": "Colombia",
@@ -652,7 +653,10 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     failed = 0
 
     for i in range(count):
-        res = req_api(api_key, 'getNumber', service=SERVICE, country=country['country_id'])
+        kwargs = {'service': SERVICE, 'country': country['country_id']}
+        if 'maxPrice' in country:
+            kwargs['maxPrice'] = country['maxPrice']
+        res = req_api(api_key, 'getNumber', **kwargs)
 
         if 'ACCESS_NUMBER' in res:
             parts = res.split(':')
