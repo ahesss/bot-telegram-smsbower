@@ -384,10 +384,8 @@ def start_cmd(message):
     # Cek whitelist
     if not is_whitelisted(user_id):
         bot.send_message(message.chat.id,
-            "🔒 *Akses Ditolak*\n\n"
-            "Bot ini hanya bisa digunakan oleh user yang sudah diizinkan oleh admin.\n"
-            f"User ID Anda: `{user_id}`\n\n"
-            "Hubungi admin untuk mendapatkan akses.",
+            "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\n"
+            "Hub admin ganteng: @hesssxb",
             parse_mode="Markdown")
         return
 
@@ -429,7 +427,7 @@ def start_cmd(message):
 @bot.message_handler(commands=['help'])
 def help_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub admin ganteng: @hesssxb", parse_mode="Markdown")
         return
     text = (
         "📖 *Panduan Penggunaan*\n\n"
@@ -451,7 +449,7 @@ def help_cmd(message):
 @bot.message_handler(commands=['setapi'])
 def setapi_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub admin ganteng: @hesssxb", parse_mode="Markdown")
         return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -472,7 +470,7 @@ def setapi_cmd(message):
 @bot.message_handler(commands=['balance'])
 def balance_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub admin ganteng: @hesssxb", parse_mode="Markdown")
         return
     api_key = get_user_api(message.from_user.id)
     if not api_key:
@@ -489,7 +487,7 @@ def balance_cmd(message):
 @bot.message_handler(commands=['order'])
 def order_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub admin ganteng: @hesssxb", parse_mode="Markdown")
         return
     api_key = get_user_api(message.from_user.id)
     if not api_key:
@@ -580,7 +578,7 @@ def callback_q(call):
 
     # Cek whitelist untuk callback juga
     if not is_whitelisted(user_id):
-        bot.answer_callback_query(call.id, "🔒 Anda tidak memiliki akses ke bot ini.", show_alert=True)
+        bot.answer_callback_query(call.id, "🔒 Maaf, Anda tidak bisa mengakses bot ini. Hub admin ganteng: @hesssxb", show_alert=True)
         return
 
     api_key = get_user_api(user_id)
