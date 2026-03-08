@@ -541,8 +541,10 @@ def start_cmd(message):
     # Cek whitelist
     if not is_whitelisted(user_id):
         bot.send_message(message.chat.id,
-            "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\n"
-            "Hub orang ganteng: @hesssxb",
+            "🔒 *Akses Ditolak*\n\n"
+            "Bot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\n"
+            f"ID Telegram Anda: `{message.from_user.id}`\n"
+            "Kirimkan angka ID di atas ke Admin.",
             parse_mode="Markdown")
         return
 
@@ -596,7 +598,7 @@ def start_cmd(message):
 @bot.message_handler(commands=['help'])
 def help_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub orang ganteng: @hesssxb", parse_mode="Markdown")
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin.", parse_mode="Markdown")
         return
     text = (
         "📖 *Panduan Penggunaan*\n\n"
@@ -620,7 +622,7 @@ def help_cmd(message):
 @bot.message_handler(commands=['setapi'])
 def setapi_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub orang ganteng: @hesssxb", parse_mode="Markdown")
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin.", parse_mode="Markdown")
         return
     update_user_info(message.from_user)
     log_activity(message.from_user.id, "setapi")
@@ -661,7 +663,7 @@ def setapi_cmd(message):
 @bot.message_handler(commands=['balance'])
 def balance_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub orang ganteng: @hesssxb", parse_mode="Markdown")
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin.", parse_mode="Markdown")
         return
     update_user_info(message.from_user)
     log_activity(message.from_user.id, "balance")
@@ -680,7 +682,7 @@ def balance_cmd(message):
 @bot.message_handler(commands=['order'])
 def order_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 *Maaf, Anda tidak bisa mengakses bot ini.*\n\nHub orang ganteng: @hesssxb", parse_mode="Markdown")
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin.", parse_mode="Markdown")
         return
     update_user_info(message.from_user)
     log_activity(message.from_user.id, "order")
@@ -1110,7 +1112,7 @@ def autobuy_worker(chat_id, api_key):
 def autobuy_cmd(message):
     chat_id = message.chat.id
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, "🔒 Akses ditolak.", parse_mode="Markdown")
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin.", parse_mode="Markdown")
         return
         
     api_key = get_user_api(message.from_user.id)
