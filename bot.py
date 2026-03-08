@@ -1,4 +1,5 @@
 import telebot
+# Trigger redeploy - Persistence Test 2
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 import sqlite3
