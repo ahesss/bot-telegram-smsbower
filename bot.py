@@ -13,17 +13,22 @@ import time
 TOKEN = os.environ.get("BOT_TOKEN", "8647699255:AAG1ZO_AIjAZvSCYeoeqE0s3VxUo21hCgd0")
 bot = telebot.TeleBot(TOKEN)
 
-API_BASE = "https://smsbower.page/stubs/handler_api.php"
-DB_PATH = os.environ.get("DB_PATH", "database.db")
+# =============================================
+# KONFIGURASI PERSISTENCE (RAILWAY VOLUME)
+# =============================================
+VOL_PATH = "/data"
+DEFAULT_DB = "database.db"
+# Jika folder /data (Volume Railway) ada, gunakan otomatis
+if os.path.exists(VOL_PATH) and os.path.isdir(VOL_PATH):
+    DEFAULT_DB = os.path.join(VOL_PATH, "database.db")
 
-# ADMIN — hanya admin yang bisa add/remove user
+DB_PATH = os.environ.get("DB_PATH", DEFAULT_DB)
 ADMIN_ID = 940475417
-
-MAX_ORDER = 20         # Maksimal order sekaligus
-OTP_TIMEOUT = 1500     # Timeout 25 menit (1500 detik)
-CHECK_INTERVAL = 3     # Cek OTP setiap 3 detik (DICEPATKAN)
-CANCEL_DELAY = 120     # Baru bisa cancel setelah 2 menit (120 detik)
-SERVICE = "wa"         # WhatsApp service
+MAX_ORDER = 20         
+OTP_TIMEOUT = 1500     
+CHECK_INTERVAL = 3     
+CANCEL_DELAY = 120     
+SERVICE = "wa"         
 
 # ENV BASED PERMANENT WHITELIST
 # Format: "1234567,9876543,11223344"
@@ -100,13 +105,8 @@ def init_db():
 # =============================================
 def is_whitelisted(user_id):
     """Cek apakah user ada di whitelist"""
-    perm_wl = []
-    for k, v in os.environ.items():
-        if 'whitelist' in k.lower():
-            for x in str(v).split(","):
-                x_clean = "".join(filter(str.isdigit, x))
-                if x_clean:
-                    perm_wl.append(int(x_clean))
+    env_wl = os.environ.get("WHITELIST_IDS", "")
+    perm_wl = [int(x.strip()) for x in env_wl.split(",") if x.strip().replace('-', '').isdigit()]
     
     if user_id == ADMIN_ID or user_id in perm_wl:
         return True
