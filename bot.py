@@ -99,12 +99,13 @@ def init_db():
 # =============================================
 def is_whitelisted(user_id):
     """Cek apakah user ada di whitelist"""
-    env_wl = os.environ.get("WHITELIST_IDS", "")
     perm_wl = []
-    for x in env_wl.split(","):
-        x_clean = "".join(filter(str.isdigit, x))
-        if x_clean:
-            perm_wl.append(int(x_clean))
+    for k, v in os.environ.items():
+        if 'whitelist' in k.lower():
+            for x in str(v).split(","):
+                x_clean = "".join(filter(str.isdigit, x))
+                if x_clean:
+                    perm_wl.append(int(x_clean))
     
     if user_id == ADMIN_ID or user_id in perm_wl:
         return True
@@ -498,6 +499,21 @@ def listusers_cmd(message):
         role = "👑 ADMIN" if uid == ADMIN_ID else "👤 User"
         lines.append(f"{role}: {name}\n   ID: `{uid}` | Ditambahkan: {added_at}")
     bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+
+@bot.message_handler(commands=['checkenv'])
+def checkenv_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    found = []
+    for k, v in os.environ.items():
+        if 'whitelist' in k.lower() or 'id' in k.lower():
+            found.append(f"`{k}` = `{v}`")
+    if found:
+        bot.reply_to(message, "🔍 *Variabel Railway Ditemukan:*\n\n" + "\n".join(found), parse_mode="Markdown")
+    else:
+        bot.reply_to(message, "❌ *Error:* Tidak ada satupun variabel berisi kata 'whitelist' yang terdeteksi di Railway.", parse_mode="Markdown")
+
 
 @bot.message_handler(commands=['activeusers'])
 def activeusers_cmd(message):
