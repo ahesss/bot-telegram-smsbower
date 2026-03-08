@@ -20,7 +20,7 @@ ADMIN_ID = 940475417
 
 MAX_ORDER = 20         # Maksimal order sekaligus
 OTP_TIMEOUT = 1500     # Timeout 25 menit (1500 detik)
-CHECK_INTERVAL = 5     # Cek OTP setiap 5 detik
+CHECK_INTERVAL = 3     # Cek OTP setiap 3 detik (DICEPATKAN)
 CANCEL_DELAY = 120     # Baru bisa cancel setelah 2 menit (120 detik)
 SERVICE = "wa"         # WhatsApp service
 
@@ -999,13 +999,14 @@ def autobuy_worker(chat_id, api_key):
     
     # Statistics
     orders_list = []
+    order_counter = 0 # TAMBAHKAN COUNTER
     
     while autobuy_active.get(chat_id, False):
         attempts += 1
         
         # Update log status agar user tahu bot masih jalan
         now = time.time()
-        if status_msg and (now - last_ui_update > 5):
+        if status_msg and (now - last_ui_update > 7):
             elapsed_m = int((now - start_time) // 60)
             elapsed_s = int((now - start_time) % 60)
             target_count = len(orders_list)
@@ -1036,6 +1037,7 @@ def autobuy_worker(chat_id, api_key):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
+                order_counter += 1 # NAIKKAN NOMOR URUT
                 
                 # Fetch price
                 price_val = None
@@ -1070,7 +1072,10 @@ def autobuy_worker(chat_id, api_key):
                 # Kirim sebagai pesan baru (1 per 1)
                 orders_list.append(order)
                 single_order_list = [order]
-                text = format_order_message(single_order_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key)
+                
+                # Tambahkan nomor urut ke judul (1., 2., 3., dst)
+                custom_title = f"{order_counter}. 🎯 *TARGET DIDAPATKAN (AUTO BUY)*"
+                text = format_order_message(single_order_list, custom_title, country_key)
                 
                 markup = InlineKeyboardMarkup()
                 markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
@@ -1095,17 +1100,29 @@ def autobuy_worker(chat_id, api_key):
                         target_count = len(orders_list)
                         bot.edit_message_text(
                             f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
-                            f"✅ *Nomor Berhasil Didapat! Lanjut mencari...*\n"
+                            f"✅ *Target {order_counter} Didapat! Lanjut cari...*\n"
                             f"📈 *Total percobaan:* {attempts}x\n"
-                            f"🎯 *Target didapat:* {target_count} nomor",
+                            f"🎯 *Total didapat:* {target_count} nomor",
                             chat_id, status_msg.message_id, parse_mode="Markdown"
                         )
                     except: pass
                 
-                # Jeda agar tidak dianggap spam membabi buta oleh Telegram
-                time.sleep(1.5) 
+                # JEDA SANGAT SINGKAT (BRUTAL MODE)
+                time.sleep(1) 
 
-        time.sleep(CHECK_INTERVAL)
+        elif res == 'NO_BALANCE':
+            bot.send_message(chat_id, "❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", parse_mode="Markdown")
+            autobuy_active[chat_id] = False
+            break
+        elif res == 'NO_NUMBERS':
+            # Jika tidak ada nomor, tidur sebentar saja (0.1 detik) biar brutal
+            time.sleep(0.1)
+        else:
+            time.sleep(0.2)
+
+        # Dipercepat interval cek-nya
+        time.sleep(0.5) 
+
 
     # Finally cleanup
     if chat_id in autobuy_active:
