@@ -3,6 +3,7 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 import sqlite3
+import json
 import os
 import threading
 import time
@@ -29,6 +30,7 @@ OTP_TIMEOUT = 1500
 CHECK_INTERVAL = 3     
 CANCEL_DELAY = 120     
 SERVICE = "wa"         
+API_BASE = "https://smsbower.com/stubs/handler_api.php"
 
 # ENV BASED PERMANENT WHITELIST
 # Format: "1234567,9876543,11223344"
