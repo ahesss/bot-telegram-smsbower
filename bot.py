@@ -385,7 +385,9 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 time.sleep(0.3)
 
             now = time.time()
-            should_update = changed or (now - last_timer_update >= TIMER_UPDATE)
+            # In individual message mode, we update timer less frequently to avoid global rate limits
+            # across many active messages. Status change (changed=True) always updates immediately.
+            should_update = changed or (now - last_timer_update >= 20)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
@@ -400,7 +402,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                     if can_cancel:
                         ids_str = ",".join([o['id'] for o in remaining])
                         markup.row(InlineKeyboardButton(
-                            f"🚫 Batalkan Sisa ({len(remaining)})",
+                            f"🚫 Batalkan ({len(remaining)})" if len(remaining) > 1 else "🚫 Batalkan Order",
                             callback_data=f"cancelall_{ids_str}"
                         ))
                     else:
@@ -418,7 +420,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                         last_edit_time = now
                         last_timer_update = now
 
-            time.sleep(CHECK_INTERVAL)
+            time.sleep(CHECK_INTERVAL + 1) # Extra breath for rate limits
 
     except Exception as e:
         print(f"Auto-check OTP thread error: {e}")
@@ -995,15 +997,13 @@ def autobuy_worker(chat_id, api_key):
     start_time = time.time()
     last_ui_update = time.time()
     
-    # Overlay mechanism
+    # Statistics
     orders_list = []
-    consolidated_msg_id = None
-    checker_started = False
     
     while autobuy_active.get(chat_id, False):
         attempts += 1
         
-        # Update UI setiap 5 detik agar user tahu bot masih jalan
+        # Update log status agar user tahu bot masih jalan
         now = time.time()
         if status_msg and (now - last_ui_update > 5):
             elapsed_m = int((now - start_time) // 60)
@@ -1037,7 +1037,7 @@ def autobuy_worker(chat_id, api_key):
                 t_id = parts[1]
                 number = parts[2]
                 
-                # Fetch price for display
+                # Fetch price
                 price_val = None
                 try:
                     params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(country['country_id'])}
@@ -1049,12 +1049,9 @@ def autobuy_worker(chat_id, api_key):
                         inner = p_data[c_id_str][SERVICE]
                     elif SERVICE in p_data and c_id_str in p_data[SERVICE]:
                         inner = p_data[SERVICE][c_id_str]
-                    
                     if inner and isinstance(inner, dict):
-                        if "cost" in inner:
-                            price_val = inner["cost"]
+                        if "cost" in inner: price_val = inner["cost"]
                         else:
-                            # If multiple prices, get the cheapest one
                             numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
@@ -1069,50 +1066,44 @@ def autobuy_worker(chat_id, api_key):
                     'price': price_val
                 }
                 
-                # PUSH TO OVERLAY LIST
+                # JANGAN PAKAI CONSOLIDATED / OVERLAY
+                # Kirim sebagai pesan baru (1 per 1)
                 orders_list.append(order)
-                text = format_order_message(orders_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key)
+                single_order_list = [order]
+                text = format_order_message(single_order_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key)
                 
                 markup = InlineKeyboardMarkup()
                 markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
                 
                 try:
-                    if not consolidated_msg_id:
-                        # CREATE THE FIRST OVERLAY MESSAGE
-                        msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
-                        consolidated_msg_id = msg.message_id
-                        if chat_id not in active_orders:
-                            active_orders[chat_id] = {}
-                        active_orders[chat_id][consolidated_msg_id] = orders_list
-                    else:
-                        # JUST EDIT THE EXISTING OVERLAY MESSAGE
-                        bot.edit_message_text(text, chat_id, consolidated_msg_id, parse_mode="Markdown", reply_markup=markup)
+                    # Kirim Balon Chat Baru (Pop Up)
+                    msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
                     
-                    # START BACKGROUND CHECKER ONLY ONCE
-                    if not checker_started and consolidated_msg_id:
-                        threading.Thread(target=auto_check_otp, args=(chat_id, consolidated_msg_id, orders_list, api_key, country_key, True)).start()
-                        checker_started = True
+                    # Daftarkan ke active_orders agar bisa dicancel manual jika perlu
+                    if chat_id not in active_orders:
+                        active_orders[chat_id] = {}
+                    active_orders[chat_id][msg.message_id] = single_order_list
+                    
+                    # Jalankan monitoring OTP khusus untuk pesan ini saja
+                    threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, single_order_list, api_key, country_key, True)).start()
                 except:
                     pass
                 
-                # Update status log
-                target_count = len(orders_list)
+                # Update status log utamanya
                 if status_msg:
                     try:
+                        target_count = len(orders_list)
                         bot.edit_message_text(
                             f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
                             f"✅ *Nomor Berhasil Didapat! Lanjut mencari...*\n"
                             f"📈 *Total percobaan:* {attempts}x\n"
                             f"🎯 *Target didapat:* {target_count} nomor",
-                            chat_id, 
-                            status_msg.message_id, 
-                            parse_mode="Markdown"
+                            chat_id, status_msg.message_id, parse_mode="Markdown"
                         )
                     except: pass
                 
-                # JEDA 2 DETIK BIAR GAK KENA BAN TELEGRAM, TAPI LANGSUNG GAS CARI LAGI
-                # Tanpa nunggu nomor lama dapet OTP.
-                time.sleep(2) 
+                # Jeda agar tidak dianggap spam membabi buta oleh Telegram
+                time.sleep(1.5) 
 
         time.sleep(CHECK_INTERVAL)
 
