@@ -1146,91 +1146,15 @@ def stopauto_cmd(message):
         bot.reply_to(message, "🛑 Menghentikan pencarian otomatis...")
     else:
         bot.reply_to(message, "⚠️ Tidak ada auto buy yang berjalan.")
-eyboardButton(f"⏳ Cancel tersedia ~{wait_mins} menit lagi", callback_data="cancel_wait"))
-                
-                try:
-                    if not consolidated_msg_id:
-                        # CREATE THE FIRST OVERLAY MESSAGE
-                        msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
-                        consolidated_msg_id = msg.message_id
-                        if chat_id not in active_orders:
-                            active_orders[chat_id] = {}
-                        active_orders[chat_id][consolidated_msg_id] = orders_list
-                    
-                    # START BACKGROUND CHECKER ONLY ONCE
-                    if not checker_started and consolidated_msg_id:
-                        threading.Thread(target=auto_check_otp, args=(chat_id, consolidated_msg_id, orders_list, api_key, country_key, True)).start()
-                        checker_started = True
-                            chat_id, 
-                            status_msg.message_id, 
-                            parse_mode="Markdown"
-                        )
-                        last_ui_update = time.time()
-                except Exception as e:
-                    print("Error sending autobuy message:", e)
-                
-                time.sleep(0.5)
-                
-        elif res == 'NO_BALANCE':
-            try:
-                if status_msg:
-                    bot.edit_message_text("❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", chat_id, status_msg.message_id, parse_mode="Markdown")
-                else:
-                    bot.send_message(chat_id, "❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", parse_mode="Markdown")
-            except: pass
-            autobuy_active[chat_id] = False
-            break
-        elif res == 'NO_NUMBERS':
-            time.sleep(0.1)
-        elif 'BAD_KEY' in res or 'BANNED' in res:
-            try:
-                bot.send_message(chat_id, f"⚠️ *AUTO BUY BERHENTI*\nAkun API Anda bermasalah: `{res}`", parse_mode="Markdown")
-            except: pass
-            autobuy_active[chat_id] = False
-            break
-        elif res.startswith('ERROR'):
-            time.sleep(0.5)
-        else:
-            time.sleep(0.5)
 
-@bot.message_handler(commands=['autobuy'])
-def autobuy_cmd(message):
-    chat_id = message.chat.id
-    if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
-        return
-        
-    api_key = get_user_api(message.from_user.id)
-    if not api_key:
-        bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
-        return
-        
-    if autobuy_active.get(chat_id, False):
-        bot.reply_to(message, "⚠️ Autobuy sudah berjalan! Ketik /stopauto untuk menghentikan.")
-        return
-        
-    autobuy_active[chat_id] = True
-    threading.Thread(target=autobuy_worker, args=(chat_id, api_key), daemon=True).start()
-
-@bot.message_handler(commands=['stopauto'])
-def stopauto_cmd(message):
-    chat_id = message.chat.id
-    if autobuy_active.get(chat_id, False):
-        autobuy_active[chat_id] = False
-        bot.reply_to(message, "🛑 Perintah diterima! Autobuy sedang berhenti...", parse_mode="Markdown")
-    else:
-        bot.reply_to(message, "⚠️ Tidak ada autobuy yang sedang berjalan.")
-
-# =============================================
-# CATCH-ALL: pesan dari user tidak dikenal
-# =============================================
 @bot.message_handler(func=lambda message: True)
 def catch_all(message):
     if not is_whitelisted(message.from_user.id):
         bot.reply_to(message,
-            f"🔒 *Akses Ditolak*\n\n"
-            f"Bot ini terkunci. Hanya user yang diizinkan oleh admin yang bisa menggunakan bot ini.\n"
-            f"User ID Anda: `{message.from_user.id}`",
+            "🔒 *Akses Ditolak*\n\n"
+            "Bot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\n"
+            f"ID Telegram Anda: `{message.from_user.id}`\n"
+            "Kirimkan angka ID di atas ke Admin @hesssxb.",
             parse_mode="Markdown")
 
 # =============================================
@@ -1240,6 +1164,4 @@ if __name__ == '__main__':
     init_db()
     print("SMSBower Bot is running... (LOCKED MODE)")
     print(f"Admin ID: {ADMIN_ID}")
-    env_wl = os.environ.get("WHITELIST_IDS", "")
-    print(f"Loaded WHITELIST_IDS from Railway: '{env_wl}'")
     bot.infinity_polling()
