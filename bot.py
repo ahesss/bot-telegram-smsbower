@@ -1003,6 +1003,7 @@ def autobuy_worker(chat_id, api_key):
     while autobuy_active.get(chat_id, False):
         attempts += 1
         
+        # Update UI setiap 5 detik agar user tahu bot masih jalan
         now = time.time()
         if status_msg and (now - last_ui_update > 5):
             elapsed_m = int((now - start_time) // 60)
@@ -1053,6 +1054,7 @@ def autobuy_worker(chat_id, api_key):
                         if "cost" in inner:
                             price_val = inner["cost"]
                         else:
+                            # If multiple prices, get the cheapest one
                             numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
@@ -1072,41 +1074,107 @@ def autobuy_worker(chat_id, api_key):
                 text = format_order_message(orders_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key)
                 
                 markup = InlineKeyboardMarkup()
-                remaining = [o for o in orders_list if o['status'] == 'waiting']
-                if remaining:
-                    oldest_order_time = min(o.get('order_time', time.time()) for o in remaining)
-                    can_cancel = (time.time() - oldest_order_time) >= CANCEL_DELAY
-                    if can_cancel:
-                        ids_str = ",".join([o['id'] for o in remaining])
-                        if ids_str:
-                            markup.row(InlineKeyboardButton(f"🚫 Batalkan Sisa ({len(remaining)})", callback_data=f"cancelall_{ids_str}"))
-                    else:
-                        wait_mins = int((CANCEL_DELAY - (time.time() - oldest_order_time)) / 60) + 1
-                        markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~{wait_mins} menit lagi", callback_data="cancel_wait"))
+                markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
                 
                 try:
                     if not consolidated_msg_id:
+                        # CREATE THE FIRST OVERLAY MESSAGE
                         msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
                         consolidated_msg_id = msg.message_id
                         if chat_id not in active_orders:
                             active_orders[chat_id] = {}
                         active_orders[chat_id][consolidated_msg_id] = orders_list
                     else:
+                        # JUST EDIT THE EXISTING OVERLAY MESSAGE
                         try:
                             bot.edit_message_text(text, chat_id, consolidated_msg_id, parse_mode="Markdown", reply_markup=markup)
                         except: pass
                     
+                    # START BACKGROUND CHECKER ONLY ONCE
                     if not checker_started and consolidated_msg_id:
-                        threading.Thread(target=auto_check_otp, args=(chat_id, consolidated_msg_id, orders_list, api_key, country_key, True), daemon=True).start()
+                        threading.Thread(target=auto_check_otp, args=(chat_id, consolidated_msg_id, orders_list, api_key, country_key, True)).start()
                         checker_started = True
-                        
-                    target_count = len(orders_list)
-                    if status_msg:
+                except:
+                    pass
+                
+                # Beritahu di log status bahwa baru saja dapat target!
+                target_count = len(orders_list)
+                if status_msg:
+                    try:
                         bot.edit_message_text(
                             f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
                             f"✅ *Nomor Berhasil Didapat! Lanjut mencari...*\n"
                             f"📈 *Total percobaan:* {attempts}x\n"
                             f"🎯 *Target didapat:* {target_count} nomor",
+                            chat_id, 
+                            status_msg.message_id, 
+                            parse_mode="Markdown"
+                        )
+                    except: pass
+                
+                # PAUSE AUTO-BUY JIKA ADA NOMOR YANG MASIH WAITING
+                while autobuy_active.get(chat_id, False):
+                    active_waiting = [o for o in orders_list if o['status'] == 'waiting']
+                    if not active_waiting:
+                        break
+                    time.sleep(3) 
+
+        time.sleep(CHECK_INTERVAL)
+
+    # Finally cleanup
+    if chat_id in autobuy_active:
+        autobuy_active[chat_id] = False
+    if status_msg:
+        try:
+            bot.edit_message_text(
+                "🛑 *AUTO BUY DIHENTIKAN*\n\n"
+                f"Selesai dengan total {len(orders_list)} nomor didapatkan.",
+                chat_id, status_msg.message_id, parse_mode="Markdown"
+            )
+        except: pass
+
+@bot.message_handler(commands=['autobuy'])
+def autobuy_cmd(message):
+    chat_id = message.chat.id
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
+        return
+        
+    api_key = get_user_api(message.from_user.id)
+    if not api_key:
+        bot.reply_to(message, "❌ API Key belum terdaftar. Gunakan `/setapi API_KEY`.")
+        return
+
+    if autobuy_active.get(chat_id, False):
+        bot.reply_to(message, "⚠️ Auto buy sedang berjalan.")
+        return
+
+    autobuy_active[chat_id] = True
+    threading.Thread(target=autobuy_worker, args=(chat_id, api_key)).start()
+
+@bot.message_handler(commands=['stopauto'])
+def stopauto_cmd(message):
+    chat_id = message.chat.id
+    if chat_id in autobuy_active:
+        autobuy_active[chat_id] = False
+        bot.reply_to(message, "🛑 Menghentikan pencarian otomatis...")
+    else:
+        bot.reply_to(message, "⚠️ Tidak ada auto buy yang berjalan.")
+eyboardButton(f"⏳ Cancel tersedia ~{wait_mins} menit lagi", callback_data="cancel_wait"))
+                
+                try:
+                    if not consolidated_msg_id:
+                        # CREATE THE FIRST OVERLAY MESSAGE
+                        msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
+                        consolidated_msg_id = msg.message_id
+                        if chat_id not in active_orders:
+                            active_orders[chat_id] = {}
+                        active_orders[chat_id][consolidated_msg_id] = orders_list
+                    
+                    # START BACKGROUND CHECKER ONLY ONCE
+                    if not checker_started and consolidated_msg_id:
+                        threading.Thread(target=auto_check_otp, args=(chat_id, consolidated_msg_id, orders_list, api_key, country_key, True)).start()
+                        checker_started = True
                             chat_id, 
                             status_msg.message_id, 
                             parse_mode="Markdown"
