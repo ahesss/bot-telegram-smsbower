@@ -253,25 +253,27 @@ def format_order_message(orders, title="", country_key="vietnam"):
     for i, order in enumerate(orders, 1):
         number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
+        # Format harga: [💰 0.203 USD]
+        price_str = f" [💰 {order['price']} USD]" if order.get('price') else ""
 
         if status == 'waiting':
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
             secs = int(remaining % 60)
-            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... ({mins}m {secs}s)")
+            lines.append(f"{i}. `{number_local}`{price_str} — ⏳ Menunggu OTP... ({mins}m {secs}s)")
         elif status == 'got_otp':
             code = order.get('code', '???')
-            lines.append(f"{i}. `{number_local}` — ✅ OTP: `{code}`")
+            lines.append(f"{i}. `{number_local}`{price_str} — ✅ OTP: `{code}`")
             done_count += 1
         elif status == 'cancelled':
-            lines.append(f"{i}. `{number_local}` — 🚫 Dibatalkan (Refund)")
+            lines.append(f"{i}. `{number_local}`{price_str} — 🚫 Dibatalkan (Refund)")
             done_count += 1
         elif status == 'timeout':
-            lines.append(f"{i}. `{number_local}` — ⏰ Timeout (25 menit)")
+            lines.append(f"{i}. `{number_local}`{price_str} — ⏰ Timeout (25 menit)")
             done_count += 1
         elif status == 'error':
-            lines.append(f"{i}. `{number_local}` — ❌ Error")
+            lines.append(f"{i}. `{number_local}`{price_str} — ❌ Error")
             done_count += 1
 
     lines.append("")
@@ -700,13 +702,36 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
+                
+                # Fetch price for display
+                price_val = None
+                try:
+                    params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(country['country_id'])}
+                    r_p = requests.get(API_BASE, params=params, timeout=3)
+                    p_data = json.loads(r_p.text.strip())
+                    inner = None
+                    c_id_str = str(country['country_id'])
+                    if c_id_str in p_data and SERVICE in p_data[c_id_str]:
+                        inner = p_data[c_id_str][SERVICE]
+                    elif SERVICE in p_data and c_id_str in p_data[SERVICE]:
+                        inner = p_data[SERVICE][c_id_str]
+                    
+                    if inner and isinstance(inner, dict):
+                        if "cost" in inner:
+                            price_val = inner["cost"]
+                        else:
+                            numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
+                            if numeric_keys: price_val = min(numeric_keys)
+                except: pass
+
                 orders.append({
                     'id': t_id,
                     'number': number,
                     'status': 'waiting',
                     'code': None,
                     'order_time': time.time(),
-                    'country_key': country_key
+                    'country_key': country_key,
+                    'price': price_val
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
