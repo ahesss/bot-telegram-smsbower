@@ -46,21 +46,21 @@ COUNTRIES = {
         "flag": "🇻🇳",
         "country_id": "10",
         "country_code": "84",
-        "maxPrice": "0.238",
+        "maxPrice": "0.2",
     },
     "colombia": {
         "name": "Colombia",
         "flag": "🇨🇴",
         "country_id": "33",
         "country_code": "57",
-        "maxPrice": "0.25",
+        "maxPrice": "0.2",
     },
     "philipina": {
         "name": "Philipina",
         "flag": "🇵🇭",
         "country_id": "4",
         "country_code": "63",
-        "maxPrice": "0.25",
+        "maxPrice": "0.2",
     },
 }
 
@@ -748,7 +748,11 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     orders = []
     failed = 0
 
-    for i in range(count):
+    max_retries = count * 3
+    attempts = 0
+
+    while len(orders) < count and attempts < max_retries:
+        attempts += 1
         kwargs = {'service': SERVICE, 'country': country['country_id']}
         if 'maxPrice' in country:
             kwargs['maxPrice'] = country['maxPrice']
@@ -781,6 +785,13 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
+                if price_val and 'maxPrice' in country:
+                    if float(price_val) > float(country['maxPrice']):
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        time.sleep(0.3)
+                        continue
+
                 orders.append({
                     'id': t_id,
                     'number': number,
@@ -806,8 +817,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         else:
             failed += 1
 
-        if i < count - 1:
-            time.sleep(0.3)
+        time.sleep(0.3)
 
     if not orders:
         bot.edit_message_text("❌ Gagal memesan nomor. Coba lagi nanti.", chat_id, msg.message_id, parse_mode="Markdown")
@@ -1075,6 +1085,13 @@ def autobuy_worker(chat_id, api_key):
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
+                if price_val and 'maxPrice' in country:
+                    if float(price_val) > float(country['maxPrice']):
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        time.sleep(0.3)
+                        continue
+
                 order = {
                     'id': t_id,
                     'number': number,
@@ -1084,10 +1101,9 @@ def autobuy_worker(chat_id, api_key):
                     'country_key': country_key,
                     'price': price_val
                 }
-                
+                orders_list.append(order)
                 # JANGAN PAKAI CONSOLIDATED / OVERLAY
                 # Kirim sebagai pesan baru (1 per 1)
-                orders_list.append(order)
                 single_order_list = [order]
                 
                 # Gunakan start_index=order_counter agar nomornya 1., 2., 3...
