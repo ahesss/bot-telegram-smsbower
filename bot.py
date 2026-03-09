@@ -46,21 +46,21 @@ COUNTRIES = {
         "flag": "🇻🇳",
         "country_id": "10",
         "country_code": "84",
-        "maxPrice": "0.20",
+        "maxPrice": "0.25",
     },
     "philipina": {
         "name": "Philipina",
         "flag": "🇵🇭",
         "country_id": "4",
         "country_code": "63",
-        "maxPrice": "0.20",
+        "maxPrice": "0.25",
     },
     "colombia": {
         "name": "Colombia",
         "flag": "🇨🇴",
         "country_id": "33",
         "country_code": "57",
-        "maxPrice": "0.20",
+        "maxPrice": "0.25",
     },
 }
 
