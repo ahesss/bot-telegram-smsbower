@@ -53,6 +53,14 @@ COUNTRIES = {
         "flag": "🇨🇴",
         "country_id": "33",
         "country_code": "57",
+        "maxPrice": "0.25",
+    },
+    "philipina": {
+        "name": "Philipina",
+        "flag": "🇵🇭",
+        "country_id": "4",
+        "country_code": "63",
+        "maxPrice": "0.25",
     },
 }
 
@@ -584,7 +592,8 @@ def start_cmd(message):
         "Pilih negara, lalu pilih jumlah nomor yang ingin di-order.\n\n"
         "🌍 *Negara tersedia:*\n"
         "🇻🇳 Vietnam (Country ID: 10)\n"
-        "🇨🇴 Colombia (Country ID: 33)\n\n"
+        "🇨🇴 Colombia (Country ID: 33)\n"
+        "🇵🇭 Philipina (Country ID: 4)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key SMSBower\n"
         "`/order N` — Order N nomor (pilih negara dulu)\n"
@@ -606,8 +615,9 @@ def start_cmd(message):
     if api_key:
         # Baris 1: Negara
         markup.row(
-            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+            InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia"),
+            InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -632,7 +642,8 @@ def help_cmd(message):
         "   `/setapi API_KEY_ANDA`\n\n"
         "2️⃣ Ketik `/start` lalu pilih negara:\n"
         "   🇻🇳 Vietnam — Country ID 10\n"
-        "   🇨🇴 Colombia — Country ID 33\n\n"
+        "   🇨🇴 Colombia — Country ID 33\n"
+        "   🇵🇭 Philipina — Country ID 4\n\n"
         "3️⃣ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
         "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
@@ -668,8 +679,9 @@ def setapi_cmd(message):
         markup = InlineKeyboardMarkup()
         # Baris 1: Negara
         markup.row(
-            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+            InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia"),
+            InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -720,8 +732,9 @@ def order_cmd(message):
     # Tampilkan pilihan negara dulu
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
-        InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+        InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
+        InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia"),
+        InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina")
     )
     bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
