@@ -789,8 +789,8 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     if float(price_val) > float(country['maxPrice']):
                         try: req_api(api_key, 'setStatus', status='8', id=t_id)
                         except: pass
-                        time.sleep(0.3)
-                        continue
+                        bot.edit_message_text(f"❌ *Harga terlalu mahal!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas maksimal kamu: ${country['maxPrice']}).\n\nPesanan otomatis dibatalkan untuk mengamankan saldo. Silakan coba lagi nanti saat harga turun.", chat_id, msg.message_id, parse_mode="Markdown")
+                        return
 
                 orders.append({
                     'id': t_id,
@@ -1089,7 +1089,7 @@ def autobuy_worker(chat_id, api_key):
                     if float(price_val) > float(country['maxPrice']):
                         try: req_api(api_key, 'setStatus', status='8', id=t_id)
                         except: pass
-                        time.sleep(0.3)
+                        time.sleep(10) # Tunggu 10 detik agar harga turun/saldo kembali
                         continue
 
                 order = {
