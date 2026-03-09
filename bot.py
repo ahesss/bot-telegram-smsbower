@@ -46,21 +46,21 @@ COUNTRIES = {
         "flag": "🇻🇳",
         "country_id": "10",
         "country_code": "84",
-        "maxPrice": "0.2",
-    },
-    "colombia": {
-        "name": "Colombia",
-        "flag": "🇨🇴",
-        "country_id": "33",
-        "country_code": "57",
-        "maxPrice": "0.2",
+        "maxPrice": "0.20",
     },
     "philipina": {
         "name": "Philipina",
         "flag": "🇵🇭",
         "country_id": "4",
         "country_code": "63",
-        "maxPrice": "0.2",
+        "maxPrice": "0.20",
+    },
+    "colombia": {
+        "name": "Colombia",
+        "flag": "🇨🇴",
+        "country_id": "33",
+        "country_code": "57",
+        "maxPrice": "0.20",
     },
 }
 
@@ -592,8 +592,7 @@ def start_cmd(message):
         "Pilih negara, lalu pilih jumlah nomor yang ingin di-order.\n\n"
         "🌍 *Negara tersedia:*\n"
         "🇻🇳 Vietnam (Country ID: 10)\n"
-        "🇨🇴 Colombia (Country ID: 33)\n"
-        "🇵🇭 Philipina (Country ID: 4)\n\n"
+        "🇨🇴 Colombia (Country ID: 33)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key SMSBower\n"
         "`/order N` — Order N nomor (pilih negara dulu)\n"
@@ -642,8 +641,7 @@ def help_cmd(message):
         "   `/setapi API_KEY_ANDA`\n\n"
         "2️⃣ Ketik `/start` lalu pilih negara:\n"
         "   🇻🇳 Vietnam — Country ID 10\n"
-        "   🇨🇴 Colombia — Country ID 33\n"
-        "   🇵🇭 Philipina — Country ID 4\n\n"
+        "   🇨🇴 Colombia — Country ID 33\n\n"
         "3️⃣ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
         "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
@@ -747,7 +745,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
 
     orders = []
     failed = 0
-
+    
     max_retries = count * 3
     attempts = 0
 
@@ -778,19 +776,19 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                         inner = p_data[SERVICE][c_id_str]
                     
                     if inner and isinstance(inner, dict):
-                        if "cost" in inner:
-                            price_val = inner["cost"]
+                        if "cost" in inner: price_val = inner["cost"]
                         else:
                             numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
+                # VERIFIKASI HARGA Sesuai Batas Max Price
                 if price_val and 'maxPrice' in country:
                     if float(price_val) > float(country['maxPrice']):
                         try: req_api(api_key, 'setStatus', status='8', id=t_id)
                         except: pass
-                        bot.edit_message_text(f"❌ *Harga terlalu mahal!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas maksimal kamu: ${country['maxPrice']}).\n\nPesanan otomatis dibatalkan untuk mengamankan saldo. Silakan coba lagi nanti saat harga turun.", chat_id, msg.message_id, parse_mode="Markdown")
-                        return
+                        # Lanjut cari nomor berikutnya tanpa memutus order
+                        continue
 
                 orders.append({
                     'id': t_id,
@@ -802,12 +800,8 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     'price': price_val
                 })
         elif res == 'NO_BALANCE':
-            bot.edit_message_text(
-                f"❌ *Saldo tidak cukup!*\n\nBerhasil order {len(orders)} dari {count} nomor.",
-                chat_id, msg.message_id, parse_mode="Markdown"
-            )
-            if not orders:
-                return
+            bot.edit_message_text(f"❌ *Saldo tidak cukup!*\n\nBerhasil order {len(orders)} dari {count} nomor.", chat_id, msg.message_id, parse_mode="Markdown")
+            if not orders: return
             break
         elif res == 'NO_NUMBERS':
             failed += 1
@@ -817,7 +811,8 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         else:
             failed += 1
 
-        time.sleep(0.3)
+        if len(orders) < count:
+            time.sleep(0.3)
 
     if not orders:
         bot.edit_message_text("❌ Gagal memesan nomor. Coba lagi nanti.", chat_id, msg.message_id, parse_mode="Markdown")
@@ -1064,33 +1059,15 @@ def autobuy_worker(chat_id, api_key):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
-                order_counter += 1 # NAIKKAN NOMOR URUT
-                
-                # Fetch price
-                price_val = None
-                try:
-                    params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(country['country_id'])}
-                    r_p = requests.get(API_BASE, params=params, timeout=3)
-                    p_data = json.loads(r_p.text.strip())
-                    inner = None
-                    c_id_str = str(country['country_id'])
-                    if c_id_str in p_data and SERVICE in p_data[c_id_str]:
-                        inner = p_data[c_id_str][SERVICE]
-                    elif SERVICE in p_data and c_id_str in p_data[SERVICE]:
-                        inner = p_data[SERVICE][c_id_str]
-                    if inner and isinstance(inner, dict):
-                        if "cost" in inner: price_val = inner["cost"]
-                        else:
-                            numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
-                            if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
                 if price_val and 'maxPrice' in country:
                     if float(price_val) > float(country['maxPrice']):
                         try: req_api(api_key, 'setStatus', status='8', id=t_id)
                         except: pass
-                        time.sleep(10) # Tunggu 10 detik agar harga turun/saldo kembali
-                        continue
+                        continue # Langsung lanjut cari nomor lain
+
+                order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
 
                 order = {
                     'id': t_id,
@@ -1101,9 +1078,10 @@ def autobuy_worker(chat_id, api_key):
                     'country_key': country_key,
                     'price': price_val
                 }
-                orders_list.append(order)
+                
                 # JANGAN PAKAI CONSOLIDATED / OVERLAY
                 # Kirim sebagai pesan baru (1 per 1)
+                orders_list.append(order)
                 single_order_list = [order]
                 
                 # Gunakan start_index=order_counter agar nomornya 1., 2., 3...
