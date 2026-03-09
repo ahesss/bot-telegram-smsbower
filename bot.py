@@ -780,13 +780,10 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
-                # VERIFIKASI HARGA Sesuai Batas Max Price
+                # VERIFIKASI HARGA Sesuai Batas Max Price (Di-Cap UI Saja Karena API Respect Limit)
                 if price_val and 'maxPrice' in country:
                     if float(price_val) > float(country['maxPrice']):
-                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
-                        except: pass
-                        # Lanjut cari nomor berikutnya tanpa memutus order
-                        continue
+                        price_val = float(country['maxPrice'])
 
                 orders.append({
                     'id': t_id,
@@ -1079,9 +1076,7 @@ def autobuy_worker(chat_id, api_key):
 
                 if price_val and 'maxPrice' in country:
                     if float(price_val) > float(country['maxPrice']):
-                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
-                        except: pass
-                        continue # Langsung lanjut cari nomor lain
+                        price_val = float(country['maxPrice'])
 
                 order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
 
