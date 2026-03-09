@@ -397,9 +397,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 time.sleep(0.3)
 
             now = time.time()
-            # In individual message mode, we update timer less frequently to avoid global rate limits
-            # across many active messages. Status change (changed=True) always updates immediately.
-            should_update = changed or (now - last_timer_update >= 20)
+            should_update = changed or (now - last_timer_update >= 4)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
@@ -1059,6 +1057,24 @@ def autobuy_worker(chat_id, api_key):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
+                
+                # Fetch price
+                price_val = None
+                try:
+                    params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(country['country_id'])}
+                    r_p = requests.get(API_BASE, params=params, timeout=3)
+                    p_data = json.loads(r_p.text.strip())
+                    inner = None
+                    c_id_str = str(country['country_id'])
+                    if c_id_str in p_data and SERVICE in p_data[c_id_str]:
+                        inner = p_data[c_id_str][SERVICE]
+                    elif SERVICE in p_data and c_id_str in p_data[SERVICE]:
+                        inner = p_data[SERVICE][c_id_str]
+                    if inner and isinstance(inner, dict):
+                        if "cost" in inner: price_val = inner["cost"]
+                        else:
+                            numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
+                            if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
                 if price_val and 'maxPrice' in country:
