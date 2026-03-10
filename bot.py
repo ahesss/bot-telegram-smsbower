@@ -630,7 +630,7 @@ def start_cmd(message):
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
             InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
         )
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
@@ -693,7 +693,7 @@ def setapi_cmd(message):
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
             InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
         )
         
@@ -900,7 +900,7 @@ def callback_q(call):
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
             InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
         )
         text = "🌍 *Pilih negara untuk order:*"
@@ -939,10 +939,17 @@ def callback_q(call):
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
         
     elif data == "nav_autobuy":
-        bot.answer_callback_query(call.id, "🔥 Mengaktifkan Auto Buy...")
-        message = call.message
-        message.from_user = call.from_user
-        autobuy_cmd(message)
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
+        try:
+            bot.edit_message_text("🚀 *Pilih negara Auto Buy:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        except:
+            bot.send_message(call.message.chat.id, "🚀 *Pilih negara Auto Buy:*", parse_mode="Markdown", reply_markup=markup)
+    elif data.startswith("auto_"):
+        country_key = data.replace("auto_", "")
+        bot.answer_callback_query(call.id, f"🔥 Mengaktifkan Auto Buy {country_key.upper()}...")
+        autobuy_active[call.message.chat.id] = country_key
+        threading.Thread(target=autobuy_worker, args=(call.message.chat.id, api_key, country_key), daemon=True).start()
     elif data == "nav_stopauto":
         bot.answer_callback_query(call.id, "🛑 Menghentikan Auto Buy...")
         message = call.message
