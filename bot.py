@@ -1059,8 +1059,8 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                 pass
 
         kwargs = {'service': SERVICE, 'country': country['country_id']}
-        if 'maxPrice' in country:
-            kwargs['maxPrice'] = country['maxPrice']
+        # if 'maxPrice' in country:
+        #     kwargs['maxPrice'] = country['maxPrice']
         res = req_api(api_key, 'getNumber', **kwargs)
         
         if 'ACCESS_NUMBER' in res:
@@ -1087,11 +1087,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                             numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
-
-                if price_val and 'maxPrice' in country:
-                    if float(price_val) > float(country['maxPrice']):
-                        price_val = float(country['maxPrice'])
-
+                # Harga asli tanpa batasan untuk Auto Buy
                 order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
 
                 order = {
