@@ -46,27 +46,28 @@ COUNTRIES = {
         "flag": "🇻🇳",
         "country_id": "10",
         "country_code": "84",
-        "maxPrice": "0.25",
-    },
-    "philipina": {
-        "name": "Philipina",
-        "flag": "🇵🇭",
-        "country_id": "4",
-        "country_code": "63",
-        "maxPrice": "0.25",
+        "maxPrice": "0.2",
     },
     "colombia": {
         "name": "Colombia",
         "flag": "🇨🇴",
         "country_id": "33",
         "country_code": "57",
-        "maxPrice": "0.25",
+        "maxPrice": "0.2",
+    },
+    "philipina": {
+        "name": "Philipina",
+        "flag": "🇵🇭",
+        "country_id": "4",
+        "country_code": "63",
+        "maxPrice": "0.2",
     },
     "mexico": {
         "name": "Mexico",
         "flag": "🇲🇽",
         "country_id": "54",
         "country_code": "52",
+        "maxPrice": "0.2",
     },
 }
 
@@ -291,7 +292,8 @@ def format_order_message(orders, title="", country_key="vietnam", start_index=1,
     for i, order in enumerate(orders, start_index):
         number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
-        price_str = f" | 💰 {order['price']} USD" if order.get('price') else ""
+        # Format harga: [💰 0.203 USD]
+        price_str = f" [💰 {order['price']} USD]" if order.get('price') else ""
 
         if status == 'waiting':
             elapsed = now - order.get('order_time', now)
@@ -402,7 +404,9 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 time.sleep(0.3)
 
             now = time.time()
-            should_update = changed or (now - last_timer_update >= 4)
+            # In individual message mode, we update timer less frequently to avoid global rate limits
+            # across many active messages. Status change (changed=True) always updates immediately.
+            should_update = changed or (now - last_timer_update >= 20)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
@@ -496,6 +500,21 @@ def removeuser_cmd(message):
         return
     remove_from_whitelist(target_id)
     bot.reply_to(message, f"✅ User `{target_id}` dihapus dari whitelist.", parse_mode="Markdown")
+
+@bot.message_handler(commands=['clearusers'])
+def clearusers_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM whitelist WHERE user_id != ?", (ADMIN_ID,))
+    deleted = c.rowcount
+    c.execute("DELETE FROM users WHERE user_id != ?", (ADMIN_ID,))
+    c.execute("DELETE FROM user_info WHERE user_id != ?", (ADMIN_ID,))
+    conn.commit()
+    conn.close()
+    bot.reply_to(message, f"✅ Berhasil menghapus *{deleted}* user dari whitelist server beserta data info dan API mereka.\n(Admin dan ENV whitelist tetap aman).", parse_mode="Markdown")
 
 @bot.message_handler(commands=['listusers'])
 def listusers_cmd(message):
@@ -596,6 +615,7 @@ def start_cmd(message):
         "🌍 *Negara tersedia:*\n"
         "🇻🇳 Vietnam (Country ID: 10)\n"
         "🇨🇴 Colombia (Country ID: 33)\n"
+        "🇵🇭 Philipina (Country ID: 4)\n"
         "🇲🇽 Mexico (Country ID: 54)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key SMSBower\n"
@@ -619,7 +639,9 @@ def start_cmd(message):
         # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia"),
+            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia")
+        )
+        markup.row(
             InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico")
         )
@@ -646,7 +668,8 @@ def help_cmd(message):
         "   `/setapi API_KEY_ANDA`\n\n"
         "2️⃣ Ketik `/start` lalu pilih negara:\n"
         "   🇻🇳 Vietnam — Country ID 10\n"
-        "   🇨🇴 Colombia — Country ID 33\n\n"
+        "   🇨🇴 Colombia — Country ID 33\n"
+        "   🇵🇭 Philipina — Country ID 4\n\n"
         "3️⃣ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
         "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
@@ -654,7 +677,7 @@ def help_cmd(message):
         "🚫 Cancel: tersedia setelah 2 menit\n"
         "📱 Maks order: 20 nomor sekaligus\n\n"
         "💰 Cek saldo: `/balance`\n"
-        "🔥 Auto buy VN: `/autobuy`\n"
+        "🔥 Auto buy: `/autobuy`\n"
         "🛑 Stop auto: `/stopauto`"
     )
     bot.send_message(message.chat.id, text, parse_mode="Markdown")
@@ -683,8 +706,11 @@ def setapi_cmd(message):
         # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia"),
-            InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina")
+            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia")
+        )
+        markup.row(
+            InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
+            InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -736,8 +762,11 @@ def order_cmd(message):
     markup = InlineKeyboardMarkup()
     markup.row(
         InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
-        InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia"),
-        InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina")
+        InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia")
+    )
+    markup.row(
+        InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
+        InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico")
     )
     bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
@@ -750,7 +779,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
 
     orders = []
     failed = 0
-    
+
     max_retries = count * 3
     attempts = 0
 
@@ -781,16 +810,19 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                         inner = p_data[SERVICE][c_id_str]
                     
                     if inner and isinstance(inner, dict):
-                        if "cost" in inner: price_val = inner["cost"]
+                        if "cost" in inner:
+                            price_val = inner["cost"]
                         else:
                             numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
-                # VERIFIKASI HARGA Sesuai Batas Max Price (Di-Cap UI Saja Karena API Respect Limit)
                 if price_val and 'maxPrice' in country:
                     if float(price_val) > float(country['maxPrice']):
-                        price_val = float(country['maxPrice'])
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        bot.edit_message_text(f"❌ *Harga terlalu mahal!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas maksimal kamu: ${country['maxPrice']}).\n\nPesanan otomatis dibatalkan untuk mengamankan saldo. Silakan coba lagi nanti saat harga turun.", chat_id, msg.message_id, parse_mode="Markdown")
+                        return
 
                 orders.append({
                     'id': t_id,
@@ -802,8 +834,12 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     'price': price_val
                 })
         elif res == 'NO_BALANCE':
-            bot.edit_message_text(f"❌ *Saldo tidak cukup!*\n\nBerhasil order {len(orders)} dari {count} nomor.", chat_id, msg.message_id, parse_mode="Markdown")
-            if not orders: return
+            bot.edit_message_text(
+                f"❌ *Saldo tidak cukup!*\n\nBerhasil order {len(orders)} dari {count} nomor.",
+                chat_id, msg.message_id, parse_mode="Markdown"
+            )
+            if not orders:
+                return
             break
         elif res == 'NO_NUMBERS':
             failed += 1
@@ -813,8 +849,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         else:
             failed += 1
 
-        if len(orders) < count:
-            time.sleep(0.3)
+        time.sleep(0.3)
 
     if not orders:
         bot.edit_message_text("❌ Gagal memesan nomor. Coba lagi nanti.", chat_id, msg.message_id, parse_mode="Markdown")
@@ -893,6 +928,10 @@ def callback_q(call):
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
+        markup.row(
+            InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina"),
+            InlineKeyboardButton("🇲🇽 Mexico", callback_data="country_mexico")
+        )
         # Baris 2: Order & Cek Saldo
         markup.row(
             InlineKeyboardButton("🛒 Order Baru", callback_data="nav_order"),
@@ -939,17 +978,24 @@ def callback_q(call):
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
         
     elif data == "nav_autobuy":
-        markup = InlineKeyboardMarkup()
-        markup.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
+        m = InlineKeyboardMarkup()
+        m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
+        m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
         try:
-            bot.edit_message_text("🚀 *Pilih negara Auto Buy:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+            bot.edit_message_text("🚀 *Pilih negara untuk Auto Buy BRUTAL:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=m)
         except:
-            bot.send_message(call.message.chat.id, "🚀 *Pilih negara Auto Buy:*", parse_mode="Markdown", reply_markup=markup)
+            bot.send_message(call.message.chat.id, "🚀 *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
+            
     elif data.startswith("auto_"):
-        country_key = data.replace("auto_", "")
+        country_key = data.split("_")[1]
+        chat_id = call.message.chat.id
+        if autobuy_active.get(chat_id, False):
+            bot.answer_callback_query(call.id, "⚠️ Auto buy sedang berjalan!", show_alert=True)
+            return
+        autobuy_active[chat_id] = country_key
         bot.answer_callback_query(call.id, f"🔥 Mengaktifkan Auto Buy {country_key.upper()}...")
-        autobuy_active[call.message.chat.id] = country_key
-        threading.Thread(target=autobuy_worker, args=(call.message.chat.id, api_key, country_key), daemon=True).start()
+        threading.Thread(target=autobuy_worker, args=(chat_id, api_key, country_key)).start()
+        
     elif data == "nav_stopauto":
         bot.answer_callback_query(call.id, "🛑 Menghentikan Auto Buy...")
         message = call.message
@@ -1008,11 +1054,12 @@ def callback_q(call):
 autobuy_active = {}
 
 def autobuy_worker(chat_id, api_key, country_key="vietnam"):
-    country_label = get_country_label(country_key).upper()
+    country = COUNTRIES[country_key]
+    
     try:
         status_msg = bot.send_message(
             chat_id, 
-            f"🔥 *AUTO BUY {country_label} AKTIF (BRUTAL MODE)*\n\n"
+            f"🔥 *AUTO BUY {country_key.upper()} AKTIF (BRUTAL MODE)*\n\n"
             "Mencari nomor nonstop sampai saldo habis...\n"
             "Ketik /stopauto untuk berhenti.\n\n"
             "⏳ *Status:* Memulai pencarian...", 
@@ -1020,8 +1067,6 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
         )
     except:
         status_msg = None
-        
-    country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     
     attempts = 0
     start_time = time.time()
@@ -1031,7 +1076,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
     orders_list = []
     order_counter = 0 # TAMBAHKAN COUNTER
     
-    while autobuy_active.get(chat_id):
+    while autobuy_active.get(chat_id, False):
         attempts += 1
         
         # Update log status agar user tahu bot masih jalan
@@ -1042,7 +1087,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
             target_count = len(orders_list)
             try:
                 bot.edit_message_text(
-                    f"🔥 *AUTO BUY {country_label} AKTIF (BRUTAL MODE)*\n\n"
+                    f"🔥 *AUTO BUY {country_key.upper()} AKTIF (BRUTAL MODE)*\n\n"
                     f"Mencari nomor nonstop sampai saldo habis...\n"
                     f"Ketik /stopauto untuk berhenti.\n\n"
                     f"🔄 *Status:* Sedang mencari...\n"
@@ -1058,8 +1103,8 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                 pass
 
         kwargs = {'service': SERVICE, 'country': country['country_id']}
-        # if 'maxPrice' in country:
-        #     kwargs['maxPrice'] = country['maxPrice']
+        if 'maxPrice' in country:
+            kwargs['maxPrice'] = country['maxPrice']
         res = req_api(api_key, 'getNumber', **kwargs)
         
         if 'ACCESS_NUMBER' in res:
@@ -1067,6 +1112,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
+                order_counter += 1 # NAIKKAN NOMOR URUT
                 
                 # Fetch price
                 price_val = None
@@ -1086,8 +1132,13 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                             numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
-                # Harga asli tanpa batasan untuk Auto Buy
-                order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
+
+                if price_val and 'maxPrice' in country:
+                    if float(price_val) > float(country['maxPrice']):
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        time.sleep(10) # Tunggu 10 detik agar harga turun/saldo kembali
+                        continue
 
                 order = {
                     'id': t_id,
@@ -1098,10 +1149,9 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                     'country_key': country_key,
                     'price': price_val
                 }
-                
+                orders_list.append(order)
                 # JANGAN PAKAI CONSOLIDATED / OVERLAY
                 # Kirim sebagai pesan baru (1 per 1)
-                orders_list.append(order)
                 single_order_list = [order]
                 
                 # Gunakan start_index=order_counter agar nomornya 1., 2., 3...
@@ -1131,7 +1181,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                     try:
                         target_count = len(orders_list)
                         bot.edit_message_text(
-                            f"🔥 *AUTO BUY {country_label} AKTIF (BRUTAL MODE)*\n\n"
+                            f"🔥 *AUTO BUY {country_key.upper()} AKTIF (BRUTAL MODE)*\n\n"
                             f"✅ *Target {order_counter} Didapat! Lanjut cari...*\n"
                             f"📈 *Total percobaan:* {attempts}x\n"
                             f"🎯 *Total didapat:* {target_count} nomor",
@@ -1184,8 +1234,10 @@ def autobuy_cmd(message):
         bot.reply_to(message, "⚠️ Auto buy sedang berjalan.")
         return
 
-    autobuy_active[chat_id] = "vietnam"
-    threading.Thread(target=autobuy_worker, args=(chat_id, api_key, "vietnam")).start()
+    m = InlineKeyboardMarkup()
+    m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
+    m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
+    bot.reply_to(message, "🚀 *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
 
 @bot.message_handler(commands=['stopauto'])
 def stopauto_cmd(message):
