@@ -67,7 +67,7 @@ COUNTRIES = {
         "flag": "🇲🇽",
         "country_id": "54",
         "country_code": "52",
-        "maxPrice": "0.2",
+        "maxPrice": "1.0",
     },
 }
 
