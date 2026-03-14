@@ -343,9 +343,9 @@ def safe_edit_message(text, chat_id, message_id, markup=None):
     except Exception as e:
         err_str = str(e).lower()
         if "retry after" in err_str or "too many requests" in err_str:
-            time.sleep(5)
-        elif "message is not modified" in err_str:
-            return True
+            # Jika kena limit pesan, jangan sleep kelamaan biar thread gak hang
+            time.sleep(1)
+            return False
         else:
             print(f"Edit message error: {e}")
         return False
@@ -395,7 +395,8 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 try:
                     res = req_api(api_key, 'getStatus', id=o['id'])
                     if res.startswith('STATUS_OK'):
-                        code = res.split(':')[1] if ':' in res else '???'
+                        # Gunakan [-1] agar selalu ambil bagian terakhir (kode OTP)
+                        code = res.split(':')[-1] if ':' in res else '???'
                         o['status'] = 'got_otp'
                         o['code'] = code
                         changed = True
@@ -411,9 +412,8 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 time.sleep(0.3)
 
             now = time.time()
-            # In individual message mode, we update timer less frequently to avoid global rate limits
-            # across many active messages. Status change (changed=True) always updates immediately.
-            should_update = changed or (now - last_timer_update >= 20)
+            # Update timer setiap 7 detik agar tidak "macet" di layar
+            should_update = changed or (now - last_timer_update >= 7)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
@@ -446,7 +446,8 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                         last_edit_time = now
                         last_timer_update = now
 
-            time.sleep(CHECK_INTERVAL + 1) # Extra breath for rate limits
+            # Jeda antar pengecekan dipercepat untuk mode Brutal
+            time.sleep(2) 
 
     except Exception as e:
         print(f"Auto-check OTP thread error: {e}")
