@@ -1102,8 +1102,8 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
         'last_ui_update': time.time()
     }
     
-    # 20 workers for Telegram (Balanced not to crash the bot process)
-    NUM_WORKERS = 20
+    # 12 workers for Telegram (Balanced and stable)
+    NUM_WORKERS = 12
 
     def hunter_thread():
         while autobuy_active.get(chat_id) == country_key:
