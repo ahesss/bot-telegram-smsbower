@@ -13,6 +13,10 @@ import time
 # =============================================
 TOKEN = os.environ.get("BOT_TOKEN", "8647699255:AAG1ZO_AIjAZvSCYeoeqE0s3VxUo21hCgd0")
 bot = telebot.TeleBot(TOKEN)
+http_session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=50)
+http_session.mount("https://", adapter)
+http_session.mount("http://", adapter)
 
 # =============================================
 # KONFIGURASI PERSISTENCE (RAILWAY VOLUME)
@@ -255,10 +259,12 @@ def req_api(api_key, action, **kwargs):
     params = {'api_key': api_key, 'action': action}
     params.update(kwargs)
     try:
-        r = requests.get(API_BASE, params=params, timeout=15)
+        # Pindah ke http_session untuk kecepatan tembak (Persistent Connections)
+        # Timeout dikurangi menjadi 5 detik untuk 'War Mode'
+        r = http_session.get(API_BASE, params=params, timeout=5)
         return r.text.strip()
     except Exception as e:
-        return f"ERROR: {str(e)}"
+        return f"ERR_HTTP: {str(e)}"
 
 def strip_country_code(number, country_code="84"):
     """Hapus country code dari nomor, sisakan nomor lokal saja"""
@@ -1059,12 +1065,12 @@ def fetch_price_cached(api_key, country_key):
     now = time.time()
     if country_key in price_cache:
         val, ts = price_cache[country_key]
-        if now - ts < 60: return val
+        if now - ts < 120: return val # Cache diperpanjang ke 120 detik agar tidak sering hit API harga
     
     try:
         cntry = COUNTRIES[country_key]
         params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(cntry['country_id'])}
-        r = requests.get(API_BASE, params=params, timeout=5)
+        r = http_session.get(API_BASE, params=params, timeout=5)
         data = json.loads(r.text.strip())
         cid_str = str(cntry['country_id'])
         inner = data.get(cid_str, {}).get(SERVICE) or data.get(SERVICE, {}).get(cid_str)
@@ -1141,7 +1147,8 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                     req_api(api_key, 'setStatus', status='8', id=t_id)
                     orders_list.remove(order)
                     
-                time.sleep(0.05) # Reduced sleep for faster cycle
+                # WAR MODE: Jeda antar order sukses dikurangi ke hampir nol
+                time.sleep(0.01) 
                 
             elif res == 'NO_BALANCE':
                 try: bot.send_message(chat_id, "💸 *SALDO HABIS!* Auto buy dihentikan.", parse_mode="Markdown")
@@ -1150,31 +1157,32 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                 
             elif res == 'NO_NUMBERS':
                 no_number_streak += 1; err_streak = 0
-                if no_number_streak > 30:
+                if no_number_streak > 50:
                     last_ui_status = f"🟡 Menunggu stok... ({no_number_streak}x kosong)"
-                    time.sleep(0.5)
+                    time.sleep(0.3) # Jeda lebih singkat saat lama kosong
                 else:
-                    last_ui_status = "🟢 Hunting..."
-                    time.sleep(0.02)
+                    last_ui_status = "⚡ WAR MODE: Hunting..."
+                    # ZERO DELAY HUNTING
+                    pass 
                     
             else:
                 err_streak += 1
                 if 'ERROR' in res or 'ERR_HTTP' in res or not res:
-                    last_ui_status = "🔴 API Error, Jeda sejenak..."
-                    time.sleep(1.0)
+                    last_ui_status = "🔴 Jaringan/API Error, Jeda 0.5s..."
+                    time.sleep(0.5)
                 else:
                     clean_res = res[:25].replace('\n', ' ')
                     last_ui_status = f"🔴 Respon: {clean_res}"
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                 
-                if "BANNED" in res and err_streak > 2:
+                if "BANNED" in res and err_streak > 3:
                     try: bot.send_message(chat_id, f"❌ *IP BANNED!* Brutal dihentikan.", parse_mode="Markdown")
                     except: pass
                     break
 
         except Exception as ex:
             print(f"[AUTOBUY ERROR] {ex}")
-            time.sleep(1.0)
+            time.sleep(0.5)
 
     autobuy_active[chat_id] = False
     if status_msg:
