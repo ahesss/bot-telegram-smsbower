@@ -1052,18 +1052,38 @@ def callback_q(call):
 # AUTO-BUY (BRUTAL MODE)
 # =============================================
 autobuy_active = {}
+price_cache = {} # {country_key: (price, timestamp)}
+
+def fetch_price_cached(api_key, country_key):
+    """Ambil harga dengan cache agar tidak lambat"""
+    now = time.time()
+    if country_key in price_cache:
+        val, ts = price_cache[country_key]
+        if now - ts < 60: return val
+    
+    try:
+        cntry = COUNTRIES[country_key]
+        params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(cntry['country_id'])}
+        r = requests.get(API_BASE, params=params, timeout=5)
+        data = json.loads(r.text.strip())
+        cid_str = str(cntry['country_id'])
+        inner = data.get(cid_str, {}).get(SERVICE) or data.get(SERVICE, {}).get(cid_str)
+        if inner and isinstance(inner, dict):
+            price = inner.get("cost")
+            if not price:
+                nums = [float(k) for k in inner.keys() if k.replace('.','').isdigit()]
+                if nums: price = min(nums)
+            if price:
+                price_cache[country_key] = (price, now)
+                return price
+    except: pass
+    return price_cache.get(country_key, (None, 0))[0]
 
 def autobuy_worker(chat_id, api_key, country_key="vietnam"):
     country = COUNTRIES[country_key]
     try:
-        status_msg = bot.send_message(
-            chat_id, 
-            f"🚀 *SUPER BRUTAL AUTO BUY {country_key.upper()}*\n\nMode: ⚡ ULTRA BRUTAL (MaxPrice: {country.get('maxPrice','N/A')})\n🔄 Percobaan: 0", 
-            parse_mode="Markdown", 
-            reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("🛑 STOP", callback_data="nav_stopauto"))
-        )
-    except:
-        status_msg = None
+        status_msg = bot.send_message(chat_id, f"🚀 *SUPER BRUTAL AUTO BUY {country_key.upper()}*\n\nMode: ⚡ ULTRA BRUTAL\n🔄 Percobaan: 0", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("🛑 STOP", callback_data="nav_stopauto")))
+    except: status_msg = None
         
     attempts, order_counter, orders_list = 0, 0, []
     start_time, last_ui_update = time.time(), time.time()
@@ -1075,11 +1095,10 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
         try:
             attempts += 1; now = time.time()
             if status_msg and (now - last_ui_update > 4):
-                elapsed_m = int((now - start_time) // 60)
-                elapsed_s = int((now - start_time) % 60)
-                speed = attempts / max((now - start_time), 1)
+                el = int(now - start_time)
+                speed = attempts / max(el, 1)
                 try: 
-                    bot.edit_message_text(f"🚀 *SUPER BRUTAL AUTO BUY {country_key.upper()}*\n\n⚡ Mode: ULTRA BRUTAL\n💰 MaxPrice: `{country.get('maxPrice','N/A')}` USD\n🔄 Percobaan: `{attempts}`x ({speed:.1f}/detik)\n🎯 Dapat: `{len(orders_list)}` nomor\n⏱ Waktu: {elapsed_m}m {elapsed_s}s\n📡 Status: {last_ui_status}", chat_id, status_msg.message_id, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("🛑 STOP", callback_data="nav_stopauto")))
+                    bot.edit_message_text(f"🚀 *SUPER BRUTAL AUTO BUY {country_key.upper()}*\n\n⚡ Mode: ULTRA BRUTAL\n💰 MaxPrice: `{country.get('maxPrice','N/A')}` USD\n🔄 Percobaan: `{attempts}`x ({speed:.1f}/detik)\n🎯 Dapat: `{len(orders_list)}` nomor\n⏱ Waktu: {el//60}m {el%60}s\n📡 Status: {last_ui_status}", chat_id, status_msg.message_id, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("🛑 STOP", callback_data="nav_stopauto")))
                     last_ui_update = now
                 except Exception as e:
                     if "Too Many Requests" in str(e): time.sleep(1.5)
@@ -1090,68 +1109,39 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
             res = req_api(api_key, 'getNumber', **kwargs)
             
             if 'ACCESS_NUMBER' in res:
-                no_number_streak = 0
-                err_streak = 0
+                no_number_streak, err_streak = 0, 0
                 last_ui_status = "🟢 Dapat Nomor! Hunting lagi..."
                 parts = res.split(':')
                 if len(parts) >= 3:
-                    t_id = parts[1]; number = parts[2]
-                else:
-                    time.sleep(0.1)
-                    continue
+                    t_id, number = parts[1], parts[2]
+                else: continue
                 
-                # Fetch price
-                price_val = None
-                try:
-                    params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(country['country_id'])}
-                    r_p = requests.get(API_BASE, params=params, timeout=3)
-                    p_data = json.loads(r_p.text.strip())
-                    inner = None
-                    c_id_str = str(country['country_id'])
-                    if c_id_str in p_data and SERVICE in p_data[c_id_str]: inner = p_data[c_id_str][SERVICE]
-                    elif SERVICE in p_data and c_id_str in p_data[SERVICE]: inner = p_data[SERVICE][c_id_str]
-                    if inner and isinstance(inner, dict):
-                        if "cost" in inner: price_val = inner["cost"]
-                        else:
-                            numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
-                            if numeric_keys: price_val = min(numeric_keys)
-                except: pass
-
-                if price_val and 'maxPrice' in country:
-                    if float(price_val) > float(country['maxPrice']):
-                        last_ui_status = f"🟡 Skip harga mahal (${price_val})"
-                        req_api(api_key, 'setStatus', status='8', id=t_id)
-                        time.sleep(0.05)
-                        continue
+                # Gunakan cache price
+                price_val = fetch_price_cached(api_key, country_key)
 
                 order_counter += 1
                 order = {'id': t_id, 'number': number, 'status': 'waiting', 'order_time': time.time(), 'country_key': country_key, 'price': price_val}
                 orders_list.append(order)
-                single_order_list = [order]
                 
-                text = format_order_message(single_order_list, "", country_key, start_index=order_counter, show_progress=False)
-                markup = InlineKeyboardMarkup().row(InlineKeyboardButton("⏳ Wait...", callback_data="cancel_wait"))
-
                 success_send = False
-                for _ in range(5):
+                for _ in range(3):
                     try:
-                        msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
+                        m = bot.send_message(chat_id, format_order_message([order], "", country_key, start_index=order_counter, show_progress=False), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("⏳ Wait...", callback_data="cancel_wait")))
                         success_send = True
                         break
                     except Exception as e:
-                        if "Too Many Requests" in str(e): time.sleep(1.5)
-                        else: time.sleep(1)
+                        if "Too Many Requests" in str(e): time.sleep(2)
+                        else: time.sleep(0.5)
                 
                 if success_send:
-                    if chat_id not in active_orders:
-                        active_orders[chat_id] = {}
-                    active_orders[chat_id][msg.message_id] = single_order_list
-                    threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, single_order_list, api_key, country_key, True, order_counter), daemon=True).start()
+                    if chat_id not in active_orders: active_orders[chat_id] = {}
+                    active_orders[chat_id][m.message_id] = [order]
+                    threading.Thread(target=auto_check_otp, args=(chat_id, m.message_id, [order], api_key, country_key, True, order_counter), daemon=True).start()
                 else:
                     req_api(api_key, 'setStatus', status='8', id=t_id)
                     orders_list.remove(order)
                     
-                time.sleep(0.5)
+                time.sleep(0.05) # Reduced sleep for faster cycle
                 
             elif res == 'NO_BALANCE':
                 try: bot.send_message(chat_id, "💸 *SALDO HABIS!* Auto buy dihentikan.", parse_mode="Markdown")
@@ -1159,33 +1149,38 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                 break
                 
             elif res == 'NO_NUMBERS':
-                no_number_streak += 1
-                err_streak = 0
-                if no_number_streak > 50:
+                no_number_streak += 1; err_streak = 0
+                if no_number_streak > 30:
                     last_ui_status = f"🟡 Menunggu stok... ({no_number_streak}x kosong)"
                     time.sleep(0.5)
                 else:
                     last_ui_status = "🟢 Hunting..."
-                    time.sleep(0.05)
+                    time.sleep(0.02)
                     
             else:
                 err_streak += 1
                 if 'ERROR' in res or 'ERR_HTTP' in res or not res:
-                    last_ui_status = "🔴 API Error Koneksi, Jeda sejenak..."
+                    last_ui_status = "🔴 API Error, Jeda sejenak..."
                     time.sleep(1.0)
                 else:
                     clean_res = res[:25].replace('\n', ' ')
-                    last_ui_status = f"🔴 Aneh: {clean_res}"
-                    time.sleep(1.0)
+                    last_ui_status = f"🔴 Respon: {clean_res}"
+                    time.sleep(0.5)
                 
-                if "BANNED" in res and err_streak > 3:
-                    try: bot.send_message(chat_id, f"❌ *IP BANNED by SMSBower!* Mode Brutal dihentikan sementera.", parse_mode="Markdown")
+                if "BANNED" in res and err_streak > 2:
+                    try: bot.send_message(chat_id, f"❌ *IP BANNED!* Brutal dihentikan.", parse_mode="Markdown")
                     except: pass
                     break
 
         except Exception as ex:
-            print(f"[AUTOBUY INNER ERROR] {ex}")
+            print(f"[AUTOBUY ERROR] {ex}")
             time.sleep(1.0)
+
+    autobuy_active[chat_id] = False
+    if status_msg:
+        el = int(time.time() - start_time)
+        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\n\n🎯 Total dapat: `{len(orders_list)}` nomor\n🔄 Total percobaan: `{attempts}`x\n⏱ Durasi: {el//60}m {el%60}s", chat_id, status_msg.message_id, parse_mode="Markdown")
+        except: pass
 
     autobuy_active[chat_id] = False
     if status_msg:
