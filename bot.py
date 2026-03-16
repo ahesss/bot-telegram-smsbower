@@ -48,31 +48,38 @@ PERMANENT_WHITELIST = [int(x.strip()) for x in env_whitelist.split(",") if x.str
 COUNTRIES = {
     "vietnam": {
         "name": "Vietnam",
-        "flag": "🇻🇳",
+        "flag": "ðŸ‡»ðŸ‡³",
         "country_id": "10",
         "country_code": "84",
         "maxPrice": "0.2",
     },
     "colombia": {
         "name": "Colombia",
-        "flag": "🇨🇴",
+        "flag": "ðŸ‡¨ðŸ‡´",
         "country_id": "33",
         "country_code": "57",
         "maxPrice": "0.2",
     },
     "philipina": {
         "name": "Philipina",
-        "flag": "🇵🇭",
+        "flag": "ðŸ‡µðŸ‡­",
         "country_id": "4",
         "country_code": "63",
         "maxPrice": "0.2",
     },
     "mexico": {
         "name": "Mexico",
-        "flag": "🇲🇽",
+        "flag": "ðŸ‡²ðŸ‡½",
         "country_id": "54",
         "country_code": "52",
         "maxPrice": "0.6",
+    },
+    "brazil": {
+        "name": "Brazil",
+        "flag": "ðŸ‡§ðŸ‡·",
+        "country_id": "73",
+        "country_code": "55",
+        "maxPrice": "0.5",
     },
 }
 
@@ -299,36 +306,36 @@ def format_order_message(orders, title="", country_key="vietnam", start_index=1,
     for i, order in enumerate(orders, start_index):
         number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
-        # Format harga: [💰 0.203 USD]
-        price_str = f" [💰 {order['price']} USD]" if order.get('price') else ""
+        # Format harga: [ðŸ’° 0.203 USD]
+        price_str = f" [ðŸ’° {order['price']} USD]" if order.get('price') else ""
 
         if status == 'waiting':
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
             secs = int(remaining % 60)
-            # Minimalist format: i. Nomor ⏳ 05:20
-            lines.append(f"{i}. `{number_local}` ⏳ *{mins:02d}:{secs:02d}*{price_str}")
+            # Minimalist format: i. Nomor â³ 05:20
+            lines.append(f"{i}. `{number_local}` â³ *{mins:02d}:{secs:02d}*{price_str}")
         elif status == 'got_otp':
             code = order.get('code', '???')
-            # Minimalist format: i. Nomor ✅ 123456
-            lines.append(f"{i}. `{number_local}` ✅ `{code}`{price_str}")
+            # Minimalist format: i. Nomor âœ… 123456
+            lines.append(f"{i}. `{number_local}` âœ… `{code}`{price_str}")
             done_count += 1
         elif status == 'cancelled':
-            lines.append(f"{i}. `{number_local}` 🚫 *Dibatalkan*")
+            lines.append(f"{i}. `{number_local}` ðŸš« *Dibatalkan*")
             done_count += 1
         elif status == 'timeout':
-            lines.append(f"{i}. `{number_local}` ⏰ *Exp*")
+            lines.append(f"{i}. `{number_local}` â° *Exp*")
             done_count += 1
         elif status == 'error':
-            lines.append(f"{i}. `{number_local}` ❌ *Error*")
+            lines.append(f"{i}. `{number_local}` âŒ *Error*")
             done_count += 1
 
     if show_progress:
         lines.append("")
-        lines.append(f"📊 Progress: {done_count}/{total}")
+        lines.append(f"ðŸ“Š Progress: {done_count}/{total}")
         if done_count >= total:
-            lines.append("\n✅ *Semua order selesai!*")
+            lines.append("\nâœ… *Semua order selesai!*")
 
     return "\n".join(lines)
 
@@ -371,7 +378,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                     time.sleep(CHECK_INTERVAL)
                     continue
                 else:
-                    text_title = "" if is_autobuy_mode else f"🛒 *Order WA {country_label} — Selesai*"
+                    text_title = "" if is_autobuy_mode else f"ðŸ›’ *Order WA {country_label} â€” Selesai*"
                     text = format_order_message(orders, text_title, country_key, start_index=s_idx, show_progress=(not is_autobuy_mode))
                     safe_edit_message(text, chat_id, message_id)
                     break
@@ -417,7 +424,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
-                text_title = "" if is_autobuy_mode else f"🛒 *Order WA {country_label}*"
+                text_title = "" if is_autobuy_mode else f"ðŸ›’ *Order WA {country_label}*"
                 text = format_order_message(orders, text_title, country_key, start_index=s_idx, show_progress=(not is_autobuy_mode))
 
                 if remaining:
@@ -428,13 +435,13 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                     if can_cancel:
                         ids_str = ",".join([o['id'] for o in remaining])
                         markup.row(InlineKeyboardButton(
-                            f"🚫 Batalkan ({len(remaining)})" if len(remaining) > 1 else "🚫 Batalkan Order",
+                            f"ðŸš« Batalkan ({len(remaining)})" if len(remaining) > 1 else "ðŸš« Batalkan Order",
                             callback_data=f"cancelall_{ids_str}"
                         ))
                     else:
                         wait_mins = int((CANCEL_DELAY - (now - oldest_order_time)) / 60) + 1
                         markup.row(InlineKeyboardButton(
-                            f"⏳ Cancel tersedia ~{wait_mins} menit lagi",
+                            f"â³ Cancel tersedia ~{wait_mins} menit lagi",
                             callback_data="cancel_wait"
                         ))
 
@@ -453,10 +460,10 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
         print(f"Auto-check OTP thread error: {e}")
         try:
             country_label = get_country_label(country_key)
-            text_title = "🎯 *TARGET DIDAPATKAN (AUTO BUY)*" if is_autobuy_mode else f"🛒 *Order WA {country_label} — Error*"
+            text_title = "ðŸŽ¯ *TARGET DIDAPATKAN (AUTO BUY)*" if is_autobuy_mode else f"ðŸ›’ *Order WA {country_label} â€” Error*"
             text = format_order_message(orders, text_title, country_key)
             if not is_autobuy_mode:
-                text += f"\n\n⚠️ Bot error: cek ulang dengan /start"
+                text += f"\n\nâš ï¸ Bot error: cek ulang dengan /start"
             safe_edit_message(text, chat_id, message_id)
         except:
             pass
@@ -475,44 +482,44 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
 @bot.message_handler(commands=['adduser'])
 def adduser_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        bot.reply_to(message, "❌ Format: `/adduser USER_ID`\n\nContoh: `/adduser 123456789`", parse_mode="Markdown")
+        bot.reply_to(message, "âŒ Format: `/adduser USER_ID`\n\nContoh: `/adduser 123456789`", parse_mode="Markdown")
         return
     try:
         target_id = int(parts[1].strip())
     except ValueError:
-        bot.reply_to(message, "❌ User ID harus berupa angka.")
+        bot.reply_to(message, "âŒ User ID harus berupa angka.")
         return
     add_to_whitelist(target_id, message.from_user.id)
-    bot.reply_to(message, f"✅ User `{target_id}` berhasil ditambahkan ke whitelist.", parse_mode="Markdown")
+    bot.reply_to(message, f"âœ… User `{target_id}` berhasil ditambahkan ke whitelist.", parse_mode="Markdown")
 
 @bot.message_handler(commands=['removeuser'])
 def removeuser_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        bot.reply_to(message, "❌ Format: `/removeuser USER_ID`", parse_mode="Markdown")
+        bot.reply_to(message, "âŒ Format: `/removeuser USER_ID`", parse_mode="Markdown")
         return
     try:
         target_id = int(parts[1].strip())
     except ValueError:
-        bot.reply_to(message, "❌ User ID harus berupa angka.")
+        bot.reply_to(message, "âŒ User ID harus berupa angka.")
         return
     if target_id == ADMIN_ID:
-        bot.reply_to(message, "⚠️ Tidak bisa menghapus admin dari whitelist.")
+        bot.reply_to(message, "âš ï¸ Tidak bisa menghapus admin dari whitelist.")
         return
     remove_from_whitelist(target_id)
-    bot.reply_to(message, f"✅ User `{target_id}` dihapus dari whitelist.", parse_mode="Markdown")
+    bot.reply_to(message, f"âœ… User `{target_id}` dihapus dari whitelist.", parse_mode="Markdown")
 
 @bot.message_handler(commands=['clearusers'])
 def clearusers_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -522,78 +529,78 @@ def clearusers_cmd(message):
     c.execute("DELETE FROM user_info WHERE user_id != ?", (ADMIN_ID,))
     conn.commit()
     conn.close()
-    bot.reply_to(message, f"✅ Berhasil menghapus *{deleted}* user dari whitelist server beserta data info dan API mereka.\n(Admin dan ENV whitelist tetap aman).", parse_mode="Markdown")
+    bot.reply_to(message, f"âœ… Berhasil menghapus *{deleted}* user dari whitelist server beserta data info dan API mereka.\n(Admin dan ENV whitelist tetap aman).", parse_mode="Markdown")
 
 @bot.message_handler(commands=['listusers'])
 def listusers_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     users = get_all_whitelisted()
     if not users:
-        bot.reply_to(message, "📋 Whitelist kosong.")
+        bot.reply_to(message, "ðŸ“‹ Whitelist kosong.")
         return
-    lines = ["📋 *Daftar Whitelist:*\n"]
+    lines = ["ðŸ“‹ *Daftar Whitelist:*\n"]
     for uid, added_at in users:
         info = get_user_info(uid)
         if info:
             name = format_user_label(uid, info[0], info[1], info[2])
         else:
             name = str(uid)
-        role = "👑 ADMIN" if uid == ADMIN_ID else "👤 User"
+        role = "ðŸ‘‘ ADMIN" if uid == ADMIN_ID else "ðŸ‘¤ User"
         lines.append(f"{role}: {name}\n   ID: `{uid}` | Ditambahkan: {added_at}")
     bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
 
 @bot.message_handler(commands=['checkenv'])
 def checkenv_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     found = []
     for k, v in os.environ.items():
         if 'whitelist' in k.lower() or 'id' in k.lower():
             found.append(f"`{k}` = `{v}`")
     if found:
-        bot.reply_to(message, "🔍 *Variabel Railway Ditemukan:*\n\n" + "\n".join(found), parse_mode="Markdown")
+        bot.reply_to(message, "ðŸ” *Variabel Railway Ditemukan:*\n\n" + "\n".join(found), parse_mode="Markdown")
     else:
-        bot.reply_to(message, "❌ *Error:* Tidak ada satupun variabel berisi kata 'whitelist' yang terdeteksi di Railway.", parse_mode="Markdown")
+        bot.reply_to(message, "âŒ *Error:* Tidak ada satupun variabel berisi kata 'whitelist' yang terdeteksi di Railway.", parse_mode="Markdown")
 
 
 @bot.message_handler(commands=['activeusers'])
 def activeusers_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     active = get_active_users()
     if not active:
-        bot.reply_to(message, "📊 Belum ada aktivitas user.")
+        bot.reply_to(message, "ðŸ“Š Belum ada aktivitas user.")
         return
-    lines = ["📊 *User Aktif Terakhir:*\n"]
+    lines = ["ðŸ“Š *User Aktif Terakhir:*\n"]
     for i, (uid, fname, lname, uname, action, detail, ts) in enumerate(active, 1):
         name = format_user_label(uid, fname, lname, uname)
         action_text = action
         if detail:
             action_text += f" ({detail})"
-        lines.append(f"{i}. {name}\n   🔹 `{action_text}` — {ts}")
+        lines.append(f"{i}. {name}\n   ðŸ”¹ `{action_text}` â€” {ts}")
     bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
 
 @bot.message_handler(commands=['stats'])
 def stats_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        bot.reply_to(message, "ðŸš« Hanya admin yang bisa menggunakan perintah ini.")
         return
     stats = get_user_stats()
     if not stats:
-        bot.reply_to(message, "📈 Belum ada statistik.")
+        bot.reply_to(message, "ðŸ“ˆ Belum ada statistik.")
         return
-    lines = ["📈 *Statistik Penggunaan Bot:*\n"]
+    lines = ["ðŸ“ˆ *Statistik Penggunaan Bot:*\n"]
     for uid, fname, lname, uname, total, orders, balance, last_active in stats:
         name = format_user_label(uid, fname, lname, uname)
         lines.append(
-            f"👤 {name}\n"
+            f"ðŸ‘¤ {name}\n"
             f"   ID: `{uid}`\n"
-            f"   📦 Order: {orders}x | 💰 Cek saldo: {balance}x | 📊 Total: {total}x\n"
-            f"   ⏰ Terakhir aktif: {last_active}\n"
+            f"   ðŸ“¦ Order: {orders}x | ðŸ’° Cek saldo: {balance}x | ðŸ“Š Total: {total}x\n"
+            f"   â° Terakhir aktif: {last_active}\n"
         )
     bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
 
@@ -605,7 +612,7 @@ def start_cmd(message):
     # Cek whitelist
     if not is_whitelisted(user_id):
         bot.send_message(message.chat.id,
-            "🔒 *Akses Ditolak*\n\n"
+            "ðŸ”’ *Akses Ditolak*\n\n"
             "Bot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\n"
             f"ID Telegram Anda: `{message.from_user.id}`\n"
             "Kirimkan angka ID di atas ke Admin @hesssxb.",
@@ -617,93 +624,95 @@ def start_cmd(message):
     api_key = get_user_api(user_id)
 
     text = (
-        "🤖 *Bot OTP WhatsApp (SMSBower)* \n\n"
+        "ðŸ¤– *Bot OTP WhatsApp (SMSBower)* \n\n"
         "Bot ini untuk order nomor WhatsApp dengan OTP otomatis.\n"
         "Pilih negara, lalu pilih jumlah nomor yang ingin di-order.\n\n"
-        "🌍 *Negara tersedia:*\n"
-        "🇻🇳 Vietnam (Country ID: 10)\n"
-        "🇨🇴 Colombia (Country ID: 33)\n"
-        "🇵🇭 Philipina (Country ID: 4)\n"
-        "🇲🇽 Mexico (Country ID: 54)\n\n"
-        "📋 *Perintah:*\n"
-        "`/setapi API_KEY` — Daftarkan API Key SMSBower\n"
-        "`/order N` — Order N nomor (pilih negara dulu)\n"
-        "`/balance` — Cek saldo\n"
-        "`/help` — Bantuan\n\n"
+        "ðŸŒ *Negara tersedia:*\n"
+        "ðŸ‡»ðŸ‡³ Vietnam (Country ID: 10)\n"
+        "ðŸ‡¨ðŸ‡´ Colombia (Country ID: 33)\n"
+        "ðŸ‡µðŸ‡­ Philipina (Country ID: 4)\n"
+        "ðŸ‡²ðŸ‡½ Mexico (Country ID: 54)\n"
+        "ðŸ‡§ðŸ‡· Brazil (Country ID: 73)\n\n"
+        "ðŸ“‹ *Perintah:*\n"
+        "`/setapi API_KEY` â€” Daftarkan API Key SMSBower\n"
+        "`/order N` â€” Order N nomor (pilih negara dulu)\n"
+        "`/balance` â€” Cek saldo\n"
+        "`/help` â€” Bantuan\n\n"
     )
 
     if api_key:
         bal_res = req_api(api_key, 'getBalance')
         if 'ACCESS_BALANCE' in bal_res:
             bal = bal_res.split(':')[1]
-            text += f"✅ API Key: Terdaftar\n💰 Saldo: *{bal} USD*"
+            text += f"âœ… API Key: Terdaftar\nðŸ’° Saldo: *{bal} USD*"
         else:
-            text += "⚠️ API Key terdaftar tapi tidak valid.\nGunakan `/setapi API_KEY` untuk mengganti."
+            text += "âš ï¸ API Key terdaftar tapi tidak valid.\nGunakan `/setapi API_KEY` untuk mengganti."
     else:
-        text += "❌ Belum ada API Key.\nGunakan `/setapi API_KEY` untuk mendaftar."
+        text += "âŒ Belum ada API Key.\nGunakan `/setapi API_KEY` untuk mendaftar."
 
     markup = InlineKeyboardMarkup()
     if api_key:
         # Baris 1: Negara
         markup.row(
-            InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia")
+            InlineKeyboardButton("ðŸ‡»ðŸ‡³ VN", callback_data="country_vietnam"),
+            InlineKeyboardButton("ðŸ‡¨ðŸ‡´ CO", callback_data="country_colombia")
         )
         markup.row(
-            InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
-            InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico")
+            InlineKeyboardButton("ðŸ‡µðŸ‡­ PH", callback_data="country_philipina"),
+            InlineKeyboardButton("ðŸ‡²ðŸ‡½ MX", callback_data="country_mexico"),
+            InlineKeyboardButton("ðŸ‡§ðŸ‡· BR", callback_data="country_brazil")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
-            InlineKeyboardButton("🛒 Order Baru", callback_data="nav_order"),
-            InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance")
+            InlineKeyboardButton("ðŸ›’ Order Baru", callback_data="nav_order"),
+            InlineKeyboardButton("ðŸ’° Cek Saldo", callback_data="nav_balance")
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
-            InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
+            InlineKeyboardButton("ðŸ”¥ Auto Buy", callback_data="nav_autobuy"),
+            InlineKeyboardButton("ðŸ›‘ Stop Auto", callback_data="nav_stopauto")
         )
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(commands=['help'])
 def help_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
+        bot.reply_to(message, f"ðŸ”’ *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
         return
     text = (
-        "📖 *Panduan Penggunaan*\n\n"
-        "1️⃣ Daftarkan API Key dari akun SMSBower Anda:\n"
+        "ðŸ“– *Panduan Penggunaan*\n\n"
+        "1ï¸âƒ£ Daftarkan API Key dari akun SMSBower Anda:\n"
         "   `/setapi API_KEY_ANDA`\n\n"
-        "2️⃣ Ketik `/start` lalu pilih negara:\n"
-        "   🇻🇳 Vietnam — Country ID 10\n"
-        "   🇨🇴 Colombia — Country ID 33\n"
-        "   🇵🇭 Philipina — Country ID 4\n\n"
-        "3️⃣ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
-        "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
+        "2ï¸âƒ£ Ketik `/start` lalu pilih negara:\n"
+        "   ðŸ‡»ðŸ‡³ Vietnam â€” Country ID 10\n"
+        "   ðŸ‡¨ðŸ‡´ Colombia â€” Country ID 33\n"
+        "   ðŸ‡µðŸ‡­ Philipina â€” Country ID 4\n\n"
+        "3ï¸âƒ£ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
+        "4ï¸âƒ£ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
-        "⏱ Timeout: 25 menit per order\n"
-        "🚫 Cancel: tersedia setelah 2 menit\n"
-        "📱 Maks order: 20 nomor sekaligus\n\n"
-        "💰 Cek saldo: `/balance`\n"
-        "🔥 Auto buy: `/autobuy`\n"
-        "🛑 Stop auto: `/stopauto`"
+        "â± Timeout: 25 menit per order\n"
+        "ðŸš« Cancel: tersedia setelah 2 menit\n"
+        "ðŸ“± Maks order: 20 nomor sekaligus\n\n"
+        "ðŸ’° Cek saldo: `/balance`\n"
+        "ðŸ”¥ Auto buy: `/autobuy`\n"
+        "ðŸ›‘ Stop auto: `/stopauto`"
     )
     bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
 @bot.message_handler(commands=['setapi'])
 def setapi_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
+        bot.reply_to(message, f"ðŸ”’ *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
         return
     update_user_info(message.from_user)
     log_activity(message.from_user.id, "setapi")
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        bot.reply_to(message, "❌ Format: `/setapi API_KEY_KAMU`\n\nDapatkan API Key di web SMSBower.", parse_mode="Markdown")
+        bot.reply_to(message, "âŒ Format: `/setapi API_KEY_KAMU`\n\nDapatkan API Key di web SMSBower.", parse_mode="Markdown")
         return
 
     api_key = parts[1].strip()
-    bot.reply_to(message, "⏳ Mengecek API Key...")
+    bot.reply_to(message, "â³ Mengecek API Key...")
 
     bal_res = req_api(api_key, 'getBalance')
     if 'ACCESS_BALANCE' in bal_res:
@@ -713,77 +722,79 @@ def setapi_cmd(message):
         markup = InlineKeyboardMarkup()
         # Baris 1: Negara
         markup.row(
-            InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia")
+            InlineKeyboardButton("ðŸ‡»ðŸ‡³ VN", callback_data="country_vietnam"),
+            InlineKeyboardButton("ðŸ‡¨ðŸ‡´ CO", callback_data="country_colombia")
         )
         markup.row(
-            InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
-            InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico")
+            InlineKeyboardButton("ðŸ‡µðŸ‡­ PH", callback_data="country_philipina"),
+            InlineKeyboardButton("ðŸ‡²ðŸ‡½ MX", callback_data="country_mexico"),
+            InlineKeyboardButton("ðŸ‡§ðŸ‡· BR", callback_data="country_brazil")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
-            InlineKeyboardButton("🛒 Order Baru", callback_data="nav_order"),
-            InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance")
+            InlineKeyboardButton("ðŸ›’ Order Baru", callback_data="nav_order"),
+            InlineKeyboardButton("ðŸ’° Cek Saldo", callback_data="nav_balance")
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
-            InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
+            InlineKeyboardButton("ðŸ”¥ Auto Buy", callback_data="nav_autobuy"),
+            InlineKeyboardButton("ðŸ›‘ Stop Auto", callback_data="nav_stopauto")
         )
         
-        bot.send_message(message.chat.id, f"✅ API Key valid & tersimpan!\n💰 Saldo: *{bal} USD*\n\nSilakan pilih menu pesanan di bawah ini:", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(message.chat.id, f"âœ… API Key valid & tersimpan!\nðŸ’° Saldo: *{bal} USD*\n\nSilakan pilih menu pesanan di bawah ini:", parse_mode="Markdown", reply_markup=markup)
     else:
-        bot.send_message(message.chat.id, "❌ API Key tidak valid atau server gangguan.")
+        bot.send_message(message.chat.id, "âŒ API Key tidak valid atau server gangguan.")
 
 @bot.message_handler(commands=['balance'])
 def balance_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
+        bot.reply_to(message, f"ðŸ”’ *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
         return
     update_user_info(message.from_user)
     log_activity(message.from_user.id, "balance")
     api_key = get_user_api(message.from_user.id)
     if not api_key:
-        bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
+        bot.reply_to(message, "âŒ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
         return
 
     bal_res = req_api(api_key, 'getBalance')
     if 'ACCESS_BALANCE' in bal_res:
         bal = bal_res.split(':')[1]
-        bot.reply_to(message, f"💰 Saldo Anda: *{bal} USD*", parse_mode="Markdown")
+        bot.reply_to(message, f"ðŸ’° Saldo Anda: *{bal} USD*", parse_mode="Markdown")
     else:
-        bot.reply_to(message, f"❌ Gagal cek saldo: {bal_res}")
+        bot.reply_to(message, f"âŒ Gagal cek saldo: {bal_res}")
 
 @bot.message_handler(commands=['order'])
 def order_cmd(message):
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
+        bot.reply_to(message, f"ðŸ”’ *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
         return
     update_user_info(message.from_user)
     log_activity(message.from_user.id, "order")
     api_key = get_user_api(message.from_user.id)
     if not api_key:
-        bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
+        bot.reply_to(message, "âŒ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
         return
 
     # Tampilkan pilihan negara dulu
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🇻🇳 VN", callback_data="country_vietnam"),
-        InlineKeyboardButton("🇨🇴 CO", callback_data="country_colombia")
+        InlineKeyboardButton("ðŸ‡»ðŸ‡³ VN", callback_data="country_vietnam"),
+        InlineKeyboardButton("ðŸ‡¨ðŸ‡´ CO", callback_data="country_colombia")
     )
     markup.row(
-        InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
-        InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico")
+        InlineKeyboardButton("ðŸ‡µðŸ‡­ PH", callback_data="country_philipina"),
+        InlineKeyboardButton("ðŸ‡²ðŸ‡½ MX", callback_data="country_mexico"),
+        InlineKeyboardButton("ðŸ‡§ðŸ‡· BR", callback_data="country_brazil")
     )
-    bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
+    bot.send_message(message.chat.id, "ðŸŒ *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
 def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     """Proses order banyak nomor sekaligus"""
     country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     country_label = get_country_label(country_key)
 
-    msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
+    msg = bot.send_message(chat_id, f"â³ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
 
     orders = []
     failed = 0
@@ -829,7 +840,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     if float(price_val) > float(country['maxPrice']):
                         try: req_api(api_key, 'setStatus', status='8', id=t_id)
                         except: pass
-                        bot.edit_message_text(f"❌ *Harga terlalu mahal!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas maksimal kamu: ${country['maxPrice']}).\n\nPesanan otomatis dibatalkan untuk mengamankan saldo. Silakan coba lagi nanti saat harga turun.", chat_id, msg.message_id, parse_mode="Markdown")
+                        bot.edit_message_text(f"âŒ *Harga terlalu mahal!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas maksimal kamu: ${country['maxPrice']}).\n\nPesanan otomatis dibatalkan untuk mengamankan saldo. Silakan coba lagi nanti saat harga turun.", chat_id, msg.message_id, parse_mode="Markdown")
                         return
 
                 orders.append({
@@ -843,7 +854,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
-                f"❌ *Saldo tidak cukup!*\n\nBerhasil order {len(orders)} dari {count} nomor.",
+                f"âŒ *Saldo tidak cukup!*\n\nBerhasil order {len(orders)} dari {count} nomor.",
                 chat_id, msg.message_id, parse_mode="Markdown"
             )
             if not orders:
@@ -852,7 +863,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         elif res == 'NO_NUMBERS':
             failed += 1
             if failed >= 3 and not orders:
-                bot.edit_message_text(f"❌ Nomor WA {country_label} sedang tidak tersedia.", chat_id, msg.message_id, parse_mode="Markdown")
+                bot.edit_message_text(f"âŒ Nomor WA {country_label} sedang tidak tersedia.", chat_id, msg.message_id, parse_mode="Markdown")
                 return
         else:
             failed += 1
@@ -860,13 +871,13 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         time.sleep(0.3)
 
     if not orders:
-        bot.edit_message_text("❌ Gagal memesan nomor. Coba lagi nanti.", chat_id, msg.message_id, parse_mode="Markdown")
+        bot.edit_message_text("âŒ Gagal memesan nomor. Coba lagi nanti.", chat_id, msg.message_id, parse_mode="Markdown")
         return
 
-    text = format_order_message(orders, f"🛒 *Order WA {country_label}*", country_key)
+    text = format_order_message(orders, f"ðŸ›’ *Order WA {country_label}*", country_key)
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
+    markup.row(InlineKeyboardButton(f"â³ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
 
     bot.edit_message_text(text, chat_id, msg.message_id, parse_mode="Markdown", reply_markup=markup)
 
@@ -890,21 +901,21 @@ def callback_q(call):
 
     # Cek whitelist untuk callback juga
     if not is_whitelisted(user_id):
-        bot.answer_callback_query(call.id, "🔒 Maaf, Anda tidak bisa mengakses bot ini. Hub orang ganteng: @hesssxb", show_alert=True)
+        bot.answer_callback_query(call.id, "ðŸ”’ Maaf, Anda tidak bisa mengakses bot ini. Hub orang ganteng: @hesssxb", show_alert=True)
         return
 
     api_key = get_user_api(user_id)
     data = call.data
 
     if not api_key:
-        bot.answer_callback_query(call.id, "❌ Belum ada API Key. Gunakan /setapi", show_alert=True)
+        bot.answer_callback_query(call.id, "âŒ Belum ada API Key. Gunakan /setapi", show_alert=True)
         return
 
-    # Pilih negara → tampilkan submenu jumlah order
+    # Pilih negara â†’ tampilkan submenu jumlah order
     if data.startswith("country_"):
         country_key = data.replace("country_", "")
         if country_key not in COUNTRIES:
-            bot.answer_callback_query(call.id, "❌ Negara tidak valid.", show_alert=True)
+            bot.answer_callback_query(call.id, "âŒ Negara tidak valid.", show_alert=True)
             return
 
         country_label = get_country_label(country_key)
@@ -912,15 +923,15 @@ def callback_q(call):
 
         markup = InlineKeyboardMarkup()
         markup.row(
-            InlineKeyboardButton("1️⃣", callback_data=f"quick_{country_key}_1"),
-            InlineKeyboardButton("2️⃣", callback_data=f"quick_{country_key}_2"),
-            InlineKeyboardButton("3️⃣", callback_data=f"quick_{country_key}_3"),
-            InlineKeyboardButton("4️⃣", callback_data=f"quick_{country_key}_4"),
-            InlineKeyboardButton("5️⃣", callback_data=f"quick_{country_key}_5")
+            InlineKeyboardButton("1ï¸âƒ£", callback_data=f"quick_{country_key}_1"),
+            InlineKeyboardButton("2ï¸âƒ£", callback_data=f"quick_{country_key}_2"),
+            InlineKeyboardButton("3ï¸âƒ£", callback_data=f"quick_{country_key}_3"),
+            InlineKeyboardButton("4ï¸âƒ£", callback_data=f"quick_{country_key}_4"),
+            InlineKeyboardButton("5ï¸âƒ£", callback_data=f"quick_{country_key}_5")
         )
-        markup.row(InlineKeyboardButton("⬅️ Kembali", callback_data="back_to_country"))
+        markup.row(InlineKeyboardButton("â¬…ï¸ Kembali", callback_data="back_to_country"))
 
-        text = f"🌍 *Negara: {country_label}*\n\nPilih jumlah nomor WA yang ingin di-order:"
+        text = f"ðŸŒ *Negara: {country_label}*\n\nPilih jumlah nomor WA yang ingin di-order:"
 
         try:
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
@@ -933,24 +944,25 @@ def callback_q(call):
         markup = InlineKeyboardMarkup()
         # Baris 1: Negara
         markup.row(
-            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+            InlineKeyboardButton("ðŸ‡»ðŸ‡³ Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("ðŸ‡¨ðŸ‡´ Colombia", callback_data="country_colombia")
         )
         markup.row(
-            InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina"),
-            InlineKeyboardButton("🇲🇽 Mexico", callback_data="country_mexico")
+            InlineKeyboardButton("ðŸ‡µðŸ‡­ Philipina", callback_data="country_philipina"),
+            InlineKeyboardButton("ðŸ‡²ðŸ‡½ Mexico", callback_data="country_mexico"),
+            InlineKeyboardButton("ðŸ‡§ðŸ‡· Brazil", callback_data="country_brazil")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
-            InlineKeyboardButton("🛒 Order Baru", callback_data="nav_order"),
-            InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance")
+            InlineKeyboardButton("ðŸ›’ Order Baru", callback_data="nav_order"),
+            InlineKeyboardButton("ðŸ’° Cek Saldo", callback_data="nav_balance")
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
-            InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
+            InlineKeyboardButton("ðŸ”¥ Auto Buy", callback_data="nav_autobuy"),
+            InlineKeyboardButton("ðŸ›‘ Stop Auto", callback_data="nav_stopauto")
         )
-        text = "🌍 *Pilih negara untuk order:*"
+        text = "ðŸŒ *Pilih negara untuk order:*"
         try:
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
         except:
@@ -978,34 +990,38 @@ def callback_q(call):
         bal_res = req_api(api_key, 'getBalance')
         if 'ACCESS_BALANCE' in bal_res:
             bal = bal_res.split(':')[1]
-            bot.send_message(call.message.chat.id, f"💰 Saldo Anda: *{bal} USD*", parse_mode="Markdown")
+            bot.send_message(call.message.chat.id, f"ðŸ’° Saldo Anda: *{bal} USD*", parse_mode="Markdown")
         else:
-            bot.send_message(call.message.chat.id, f"❌ Gagal cek saldo: {bal_res}")
+            bot.send_message(call.message.chat.id, f"âŒ Gagal cek saldo: {bal_res}")
 
     elif data == "cancel_wait":
-        bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
+        bot.answer_callback_query(call.id, "â³ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
         
     elif data == "nav_autobuy":
         m = InlineKeyboardMarkup()
-        m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
-        m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
+        m.row(InlineKeyboardButton("ðŸ‡»ðŸ‡³ VN", callback_data="auto_vietnam"), InlineKeyboardButton("ðŸ‡¨ðŸ‡´ CO", callback_data="auto_colombia"))
+        m.row(
+            InlineKeyboardButton("ðŸ‡µðŸ‡­ PH", callback_data="auto_philipina"), 
+            InlineKeyboardButton("ðŸ‡²ðŸ‡½ MX", callback_data="auto_mexico"),
+            InlineKeyboardButton("ðŸ‡§ðŸ‡· BR", callback_data="auto_brazil")
+        )
         try:
-            bot.edit_message_text("🚀 *Pilih negara untuk Auto Buy BRUTAL:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=m)
+            bot.edit_message_text("ðŸš€ *Pilih negara untuk Auto Buy BRUTAL:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=m)
         except:
-            bot.send_message(call.message.chat.id, "🚀 *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
+            bot.send_message(call.message.chat.id, "ðŸš€ *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
             
     elif data.startswith("auto_"):
         country_key = data.split("_")[1]
         chat_id = call.message.chat.id
         if autobuy_active.get(chat_id, False):
-            bot.answer_callback_query(call.id, "⚠️ Auto buy sedang berjalan!", show_alert=True)
+            bot.answer_callback_query(call.id, "âš ï¸ Auto buy sedang berjalan!", show_alert=True)
             return
         autobuy_active[chat_id] = country_key
-        bot.answer_callback_query(call.id, f"🔥 Mengaktifkan Auto Buy {country_key.upper()}...")
+        bot.answer_callback_query(call.id, f"ðŸ”¥ Mengaktifkan Auto Buy {country_key.upper()}...")
         threading.Thread(target=autobuy_worker, args=(chat_id, api_key, country_key)).start()
         
     elif data == "nav_stopauto":
-        bot.answer_callback_query(call.id, "🛑 Menghentikan Auto Buy...")
+        bot.answer_callback_query(call.id, "ðŸ›‘ Menghentikan Auto Buy...")
         message = call.message
         message.from_user = call.from_user
         stopauto_cmd(message)
@@ -1041,17 +1057,17 @@ def callback_q(call):
             except:
                 failed_cancel += 1
 
-        bot.answer_callback_query(call.id, f"🚫 {cancelled} dibatalkan, {failed_cancel} gagal.", show_alert=True)
+        bot.answer_callback_query(call.id, f"ðŸš« {cancelled} dibatalkan, {failed_cancel} gagal.", show_alert=True)
 
         try:
             country_label = get_country_label(country_key)
             if orders_ref:
-                text = format_order_message(orders_ref, f"🛒 *Order WA {country_label} — Selesai*", country_key)
+                text = format_order_message(orders_ref, f"ðŸ›’ *Order WA {country_label} â€” Selesai*", country_key)
                 bot.edit_message_text(text, chat_id, msg_id, parse_mode="Markdown")
             else:
-                result_text = f"🚫 *{cancelled} order dibatalkan.*\nSaldo dikembalikan."
+                result_text = f"ðŸš« *{cancelled} order dibatalkan.*\nSaldo dikembalikan."
                 if failed_cancel > 0:
-                    result_text += f"\n⚠️ {failed_cancel} gagal dibatalkan."
+                    result_text += f"\nâš ï¸ {failed_cancel} gagal dibatalkan."
                 bot.edit_message_text(result_text, chat_id, msg_id, parse_mode="Markdown")
         except:
             pass
@@ -1090,7 +1106,7 @@ def fetch_price_cached(api_key, country_key):
 def autobuy_worker(chat_id, api_key, country_key="vietnam"):
     country = COUNTRIES[country_key]
     try:
-        status_msg = bot.send_message(chat_id, f"🚀 *MEGA BRUTAL AUTO BUY {country_key.upper()}*\n\nMode: 🔥 MEGA BRUTAL (20 Workers)\n🔄 Percobaan: 0", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("🛑 STOP", callback_data="nav_stopauto")))
+        status_msg = bot.send_message(chat_id, f"ðŸš€ *MEGA BRUTAL AUTO BUY {country_key.upper()}*\n\nMode: ðŸ”¥ MEGA BRUTAL (20 Workers)\nðŸ”„ Percobaan: 0", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("ðŸ›‘ STOP", callback_data="nav_stopauto")))
     except: status_msg = None
         
     # Shared stats across all hunter threads
@@ -1098,7 +1114,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
         'attempts': 0,
         'order_counter': 0,
         'orders_list': [],
-        'last_status': "⚡ MEGA BRUTAL: Sniping...",
+        'last_status': "âš¡ MEGA BRUTAL: Sniping...",
         'start_time': time.time(),
         'last_ui_update': time.time()
     }
@@ -1117,7 +1133,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                 res = req_api(api_key, 'getNumber', **kwargs)
                 
                 if 'ACCESS_NUMBER' in res:
-                    shared['last_status'] = "🟢 DAPAT NOMOR!"
+                    shared['last_status'] = "ðŸŸ¢ DAPAT NOMOR!"
                     parts = res.split(':')
                     if len(parts) >= 3:
                         t_id, number = parts[1], parts[2]
@@ -1129,7 +1145,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                         
                         # Kirim notifikasi ke user (Thread-safe-ish via bot API)
                         try:
-                            m = bot.send_message(chat_id, format_order_message([order], "", country_key, start_index=shared['order_counter'], show_progress=False), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("⏳ Wait...", callback_data="cancel_wait")))
+                            m = bot.send_message(chat_id, format_order_message([order], "", country_key, start_index=shared['order_counter'], show_progress=False), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("â³ Wait...", callback_data="cancel_wait")))
                             if chat_id not in active_orders: active_orders[chat_id] = {}
                             active_orders[chat_id][m.message_id] = [order]
                             threading.Thread(target=auto_check_otp, args=(chat_id, m.message_id, [order], api_key, country_key, True, shared['order_counter']), daemon=True).start()
@@ -1140,7 +1156,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                     
                 elif res == 'NO_BALANCE':
                     autobuy_active[chat_id] = False
-                    try: bot.send_message(chat_id, "💸 *SALDO HABIS!* Auto buy dihentikan.", parse_mode="Markdown")
+                    try: bot.send_message(chat_id, "ðŸ’¸ *SALDO HABIS!* Auto buy dihentikan.", parse_mode="Markdown")
                     except: pass
                     break
                     
@@ -1166,65 +1182,69 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
             el = int(now - shared['start_time'])
             speed = shared['attempts'] / max(el, 1)
             try: 
-                bot.edit_message_text(f"🚀 *MEGA BRUTAL AUTO BUY {country_key.upper()}*\n\n🔥 Mode: MEGA BRUTAL (20 Workers)\n💰 MaxPrice: `{country.get('maxPrice','N/A')}` USD\n🔄 Percobaan: `{shared['attempts']}`x ({speed:.1f}/detik)\n🎯 Dapat: `{len(shared['orders_list'])}` nomor\n⏱ Waktu: {el//60}m {el%60}s\n📡 Status: {shared['last_status']}", chat_id, status_msg.message_id, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("🛑 STOP", callback_data="nav_stopauto")))
+                bot.edit_message_text(f"ðŸš€ *MEGA BRUTAL AUTO BUY {country_key.upper()}*\n\nðŸ”¥ Mode: MEGA BRUTAL (20 Workers)\nðŸ’° MaxPrice: `{country.get('maxPrice','N/A')}` USD\nðŸ”„ Percobaan: `{shared['attempts']}`x ({speed:.1f}/detik)\nðŸŽ¯ Dapat: `{len(shared['orders_list'])}` nomor\nâ± Waktu: {el//60}m {el%60}s\nðŸ“¡ Status: {shared['last_status']}", chat_id, status_msg.message_id, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("ðŸ›‘ STOP", callback_data="nav_stopauto")))
                 shared['last_ui_update'] = now
-                shared['last_status'] = "⚡ Sniping..."
+                shared['last_status'] = "âš¡ Sniping..."
             except: pass
         time.sleep(1)
 
     autobuy_active[chat_id] = False
     if status_msg:
-        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\nTotal: {len(shared['orders_list'])} Nomor", chat_id, status_msg.message_id)
+        try: bot.edit_message_text(f"ðŸ›‘ *AUTO BUY SELESAI*\nTotal: {len(shared['orders_list'])} Nomor", chat_id, status_msg.message_id)
         except: pass
 
     autobuy_active[chat_id] = False
     if status_msg:
         el = int(time.time() - start_time)
-        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\n\n🎯 Total dapat: `{len(orders_list)}` nomor\n🔄 Total percobaan: `{attempts}`x\n⏱ Durasi: {el//60}m {el%60}s", chat_id, status_msg.message_id, parse_mode="Markdown")
+        try: bot.edit_message_text(f"ðŸ›‘ *AUTO BUY SELESAI*\n\nðŸŽ¯ Total dapat: `{len(orders_list)}` nomor\nðŸ”„ Total percobaan: `{attempts}`x\nâ± Durasi: {el//60}m {el%60}s", chat_id, status_msg.message_id, parse_mode="Markdown")
         except: pass
 
     autobuy_active[chat_id] = False
     if status_msg:
         elapsed_m = int((time.time() - start_time) // 60)
         elapsed_s = int((time.time() - start_time) % 60)
-        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\n\n🎯 Total dapat: `{len(orders_list)}` nomor\n🔄 Total percobaan: `{attempts}`x\n⏱ Durasi: {elapsed_m}m {elapsed_s}s", chat_id, status_msg.message_id, parse_mode="Markdown")
+        try: bot.edit_message_text(f"ðŸ›‘ *AUTO BUY SELESAI*\n\nðŸŽ¯ Total dapat: `{len(orders_list)}` nomor\nðŸ”„ Total percobaan: `{attempts}`x\nâ± Durasi: {elapsed_m}m {elapsed_s}s", chat_id, status_msg.message_id, parse_mode="Markdown")
         except: pass
 
 @bot.message_handler(commands=['autobuy'])
 def autobuy_cmd(message):
     chat_id = message.chat.id
     if not is_whitelisted(message.from_user.id):
-        bot.reply_to(message, f"🔒 *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
+        bot.reply_to(message, f"ðŸ”’ *Akses Ditolak*\nBot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\nID Telegram Anda: `{message.from_user.id}`\nKirimkan angka ID di atas ke Admin @hesssxb.", parse_mode="Markdown")
         return
         
     api_key = get_user_api(message.from_user.id)
     if not api_key:
-        bot.reply_to(message, "❌ API Key belum terdaftar. Gunakan `/setapi API_KEY`.")
+        bot.reply_to(message, "âŒ API Key belum terdaftar. Gunakan `/setapi API_KEY`.")
         return
 
     if autobuy_active.get(chat_id, False):
-        bot.reply_to(message, "⚠️ Auto buy sedang berjalan.")
+        bot.reply_to(message, "âš ï¸ Auto buy sedang berjalan.")
         return
 
     m = InlineKeyboardMarkup()
-    m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
-    m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
-    bot.reply_to(message, "🚀 *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
+    m.row(InlineKeyboardButton("ðŸ‡»ðŸ‡³ VN", callback_data="auto_vietnam"), InlineKeyboardButton("ðŸ‡¨ðŸ‡´ CO", callback_data="auto_colombia"))
+    m.row(
+        InlineKeyboardButton("ðŸ‡µðŸ‡­ PH", callback_data="auto_philipina"), 
+        InlineKeyboardButton("ðŸ‡²ðŸ‡½ MX", callback_data="auto_mexico"),
+        InlineKeyboardButton("ðŸ‡§ðŸ‡· BR", callback_data="auto_brazil")
+    )
+    bot.reply_to(message, "ðŸš€ *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
 
 @bot.message_handler(commands=['stopauto'])
 def stopauto_cmd(message):
     chat_id = message.chat.id
     if chat_id in autobuy_active:
         autobuy_active[chat_id] = False
-        bot.reply_to(message, "🛑 Menghentikan pencarian otomatis...")
+        bot.reply_to(message, "ðŸ›‘ Menghentikan pencarian otomatis...")
     else:
-        bot.reply_to(message, "⚠️ Tidak ada auto buy yang berjalan.")
+        bot.reply_to(message, "âš ï¸ Tidak ada auto buy yang berjalan.")
 
 @bot.message_handler(func=lambda message: True)
 def catch_all(message):
     if not is_whitelisted(message.from_user.id):
         bot.reply_to(message,
-            "🔒 *Akses Ditolak*\n\n"
+            "ðŸ”’ *Akses Ditolak*\n\n"
             "Bot ini diproteksi. Hanya ID yang terdaftar yang bisa mengaksesnya.\n"
             f"ID Telegram Anda: `{message.from_user.id}`\n"
             "Kirimkan angka ID di atas ke Admin @hesssxb.",
