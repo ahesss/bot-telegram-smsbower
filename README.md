@@ -1,6 +1,6 @@
 # 🤖 Bot Telegram OTP WhatsApp (SMSBower)
 
-Bot Telegram untuk order nomor WhatsApp dari berbagai negara (Vietnam, Colombia, Philipina, Mexico, USA) via API SMSBower.
+Bot Telegram untuk order nomor WhatsApp dari berbagai negara (Vietnam, Colombia, Philipina, Mexico, USA, Germany) via API SMSBower.
 Setiap pengguna bisa mendaftarkan API Key mereka sendiri.
 
 ## 📁 Struktur File
@@ -45,13 +45,12 @@ Agar database API Key pengguna tidak hilang saat redeploy:
 
 1. Buka bot di Telegram, ketik `/start`
 2. Daftarkan API Key SMSBower: `/setapi API_KEY_KAMU`
-3. Pilih negara: 🇻🇳 Vietnam, 🇨🇴 Colombia, 🇵🇭 Philipina, 🇲🇽 Mexico, atau 🇺🇸 USA
+3. Pilih negara: 🇻🇳 VN, 🇨🇴 CO, 🇵🇭 PH, 🇲🇽 MX, 🇺🇸 US, atau 🇩🇪 DE
 4. Pilih jumlah nomor atau gunakan fitur **🔥 Autobuy Brutal**
 5. Selesai!
 
-## ⚠️ Fitur Baru: USA Sniper
-- **Country ID**: 187
-- **Min Price**: $0.779
-- **Max Price**: $0.883
-- **Autobuy**: Mendukung mode Brutal Sniper
-- **Multi-country**: Mendukung PH, CO, VN, MX, US
+## ⚠️ Fitur Baru: Sniper Mode
+- **🇺🇸 USA Sniper**: ID 187, Price $0.779 - $0.883
+- **🇩🇪 Germany Sniper**: ID 43, Price $0.962 - $1.089
+- **Autobuy**: Mendukung mode Brutal Sniper untuk semua negara.
+- **Multi-country**: Mendukung VN, CO, PH, MX, US, DE.
