@@ -82,6 +82,14 @@ COUNTRIES = {
         "minPrice": "0.779",
         "maxPrice": "0.883",
     },
+    "germany": {
+        "name": "Germany",
+        "flag": "🇩🇪",
+        "country_id": "43",
+        "country_code": "49",
+        "minPrice": "0.962",
+        "maxPrice": "1.089",
+    },
 }
 
 # Menyimpan data order aktif per chat_id agar callback bisa akses
@@ -633,7 +641,8 @@ def start_cmd(message):
         "🇨🇴 Colombia (Country ID: 33)\n"
         "🇵🇭 Philipina (Country ID: 4)\n"
         "🇲🇽 Mexico (Country ID: 54)\n"
-        "🇺🇸 USA (Country ID: 187)\n\n"
+        "🇺🇸 USA (Country ID: 187)\n"
+        "🇩🇪 Germany (Country ID: 43)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key SMSBower\n"
         "`/order N` — Order N nomor (pilih negara dulu)\n"
@@ -661,7 +670,8 @@ def start_cmd(message):
         markup.row(
             InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico"),
-            InlineKeyboardButton("🇺🇸 US", callback_data="country_usa")
+            InlineKeyboardButton("🇺🇸 US", callback_data="country_usa"),
+            InlineKeyboardButton("🇩🇪 DE", callback_data="country_germany")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -729,7 +739,8 @@ def setapi_cmd(message):
         markup.row(
             InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico"),
-            InlineKeyboardButton("🇺🇸 US", callback_data="country_usa")
+            InlineKeyboardButton("🇺🇸 US", callback_data="country_usa"),
+            InlineKeyboardButton("🇩🇪 DE", callback_data="country_germany")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -786,7 +797,8 @@ def order_cmd(message):
     markup.row(
         InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
         InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico"),
-        InlineKeyboardButton("🇺🇸 US", callback_data="country_usa")
+        InlineKeyboardButton("🇺🇸 US", callback_data="country_usa"),
+        InlineKeyboardButton("🇩🇪 DE", callback_data="country_germany")
     )
     bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
@@ -960,7 +972,8 @@ def callback_q(call):
         markup.row(
             InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 Mexico", callback_data="country_mexico"),
-            InlineKeyboardButton("🇺🇸 USA", callback_data="country_usa")
+            InlineKeyboardButton("🇺🇸 USA", callback_data="country_usa"),
+            InlineKeyboardButton("🇩🇪 Germany", callback_data="country_germany")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -1010,7 +1023,12 @@ def callback_q(call):
     elif data == "nav_autobuy":
         m = InlineKeyboardMarkup()
         m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
-        m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"), InlineKeyboardButton("🇺🇸 US", callback_data="auto_usa"))
+        m.row(
+            InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), 
+            InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"), 
+            InlineKeyboardButton("🇺🇸 US", callback_data="auto_usa"),
+            InlineKeyboardButton("🇩🇪 DE", callback_data="auto_germany")
+        )
         try:
             bot.edit_message_text("🚀 *Pilih negara untuk Auto Buy BRUTAL:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=m)
         except:
@@ -1242,7 +1260,12 @@ def autobuy_cmd(message):
 
     m = InlineKeyboardMarkup()
     m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
-    m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"), InlineKeyboardButton("🇺🇸 US", callback_data="auto_usa"))
+    m.row(
+        InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), 
+        InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"), 
+        InlineKeyboardButton("🇺🇸 US", callback_data="auto_usa"),
+        InlineKeyboardButton("🇩🇪 DE", callback_data="auto_germany")
+    )
     bot.reply_to(message, "🚀 *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
 
 @bot.message_handler(commands=['stopauto'])
