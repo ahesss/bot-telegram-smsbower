@@ -72,14 +72,15 @@ COUNTRIES = {
         "flag": "🇲🇽",
         "country_id": "54",
         "country_code": "52",
-        "maxPrice": "0.6",
+        "maxPrice": "1.0",
     },
-    "brazil": {
-        "name": "Brazil",
-        "flag": "🇧🇷",
-        "country_id": "73",
-        "country_code": "55",
-        "maxPrice": "1.245",
+    "usa": {
+        "name": "USA",
+        "flag": "🇺🇸",
+        "country_id": "187",
+        "country_code": "1",
+        "minPrice": "0.779",
+        "maxPrice": "0.883",
     },
 }
 
@@ -632,7 +633,7 @@ def start_cmd(message):
         "🇨🇴 Colombia (Country ID: 33)\n"
         "🇵🇭 Philipina (Country ID: 4)\n"
         "🇲🇽 Mexico (Country ID: 54)\n"
-        "🇧🇷 Brazil (Country ID: 73)\n\n"
+        "🇺🇸 USA (Country ID: 187)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key SMSBower\n"
         "`/order N` — Order N nomor (pilih negara dulu)\n"
@@ -660,7 +661,7 @@ def start_cmd(message):
         markup.row(
             InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico"),
-            InlineKeyboardButton("🇧🇷 BR", callback_data="country_brazil")
+            InlineKeyboardButton("🇺🇸 US", callback_data="country_usa")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -728,7 +729,7 @@ def setapi_cmd(message):
         markup.row(
             InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico"),
-            InlineKeyboardButton("🇧🇷 BR", callback_data="country_brazil")
+            InlineKeyboardButton("🇺🇸 US", callback_data="country_usa")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -785,7 +786,7 @@ def order_cmd(message):
     markup.row(
         InlineKeyboardButton("🇵🇭 PH", callback_data="country_philipina"),
         InlineKeyboardButton("🇲🇽 MX", callback_data="country_mexico"),
-        InlineKeyboardButton("🇧🇷 BR", callback_data="country_brazil")
+        InlineKeyboardButton("🇺🇸 US", callback_data="country_usa")
     )
     bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
@@ -807,6 +808,8 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         kwargs = {'service': SERVICE, 'country': country['country_id']}
         if 'maxPrice' in country:
             kwargs['maxPrice'] = country['maxPrice']
+        if 'minPrice' in country:
+            kwargs['minPrice'] = country['minPrice']
         res = req_api(api_key, 'getNumber', **kwargs)
 
         if 'ACCESS_NUMBER' in res:
@@ -841,6 +844,13 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                         try: req_api(api_key, 'setStatus', status='8', id=t_id)
                         except: pass
                         bot.edit_message_text(f"❌ *Harga terlalu mahal!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas maksimal kamu: ${country['maxPrice']}).\n\nPesanan otomatis dibatalkan untuk mengamankan saldo. Silakan coba lagi nanti saat harga turun.", chat_id, msg.message_id, parse_mode="Markdown")
+                        return
+                
+                if price_val and 'minPrice' in country:
+                    if float(price_val) < float(country['minPrice']):
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        bot.edit_message_text(f"❌ *Harga terlalu murah!*\n\nHarga nomor {country_label} saat ini: *${price_val}*\n(Batas minimal kamu: ${country['minPrice']}).\n\nPesanan otomatis dibatalkan.", chat_id, msg.message_id, parse_mode="Markdown")
                         return
 
                 orders.append({
@@ -950,7 +960,7 @@ def callback_q(call):
         markup.row(
             InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina"),
             InlineKeyboardButton("🇲🇽 Mexico", callback_data="country_mexico"),
-            InlineKeyboardButton("🇧🇷 Brazil", callback_data="country_brazil")
+            InlineKeyboardButton("🇺🇸 USA", callback_data="country_usa")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -1000,11 +1010,7 @@ def callback_q(call):
     elif data == "nav_autobuy":
         m = InlineKeyboardMarkup()
         m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
-        m.row(
-            InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), 
-            InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"),
-            InlineKeyboardButton("🇧🇷 BR", callback_data="auto_brazil")
-        )
+        m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"), InlineKeyboardButton("🇺🇸 US", callback_data="auto_usa"))
         try:
             bot.edit_message_text("🚀 *Pilih negara untuk Auto Buy BRUTAL:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=m)
         except:
@@ -1128,6 +1134,7 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                 shared['attempts'] += 1
                 kwargs = {'service': SERVICE, 'country': country['country_id']}
                 if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
+                if 'minPrice' in country: kwargs['minPrice'] = country['minPrice']
                 
                 # Gunakan timeout ultra pendek untuk hunting
                 res = req_api(api_key, 'getNumber', **kwargs)
@@ -1138,6 +1145,17 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                     if len(parts) >= 3:
                         t_id, number = parts[1], parts[2]
                         price_val = fetch_price_cached(api_key, country_key)
+                        
+                        # Check min/max price for safety in autobuy
+                        if price_val:
+                            if 'maxPrice' in country and float(price_val) > float(country['maxPrice']):
+                                try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                                except: pass
+                                continue
+                            if 'minPrice' in country and float(price_val) < float(country['minPrice']):
+                                try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                                except: pass
+                                continue
                         
                         shared['order_counter'] += 1
                         order = {'id': t_id, 'number': number, 'status': 'waiting', 'order_time': time.time(), 'country_key': country_key, 'price': price_val}
@@ -1224,11 +1242,7 @@ def autobuy_cmd(message):
 
     m = InlineKeyboardMarkup()
     m.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"))
-    m.row(
-        InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), 
-        InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"),
-        InlineKeyboardButton("🇧🇷 BR", callback_data="auto_brazil")
-    )
+    m.row(InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"), InlineKeyboardButton("🇺🇸 US", callback_data="auto_usa"))
     bot.reply_to(message, "🚀 *Pilih negara untuk Auto Buy BRUTAL:*", parse_mode="Markdown", reply_markup=m)
 
 @bot.message_handler(commands=['stopauto'])
