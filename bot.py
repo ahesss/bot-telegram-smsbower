@@ -1157,13 +1157,15 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
         'attempts': 0,
         'order_counter': 0,
         'orders_list': [],
-        'last_status': "⚡ MEGA BRUTAL: Sniping...",
+        'last_status': "⚡ Sniping...",
         'start_time': time.time(),
-        'last_ui_update': time.time()
+        'last_ui_update': time.time(),
+        'last_msg_time': 0,      # Throttle pengiriman pesan ke Telegram
+        'msg_lock': threading.Lock()
     }
     
-    # 12 workers for Telegram (Balanced and stable)
-    NUM_WORKERS = 12
+    # 6 workers — cukup cepat tapi aman dari rate limit Telegram (429)
+    NUM_WORKERS = 6
 
     def hunter_thread():
         while autobuy_active.get(chat_id) == country_key:
@@ -1198,16 +1200,23 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                         order = {'id': t_id, 'number': number, 'status': 'waiting', 'order_time': time.time(), 'country_key': country_key, 'price': price_val}
                         shared['orders_list'].append(order)
                         
-                        # Kirim notifikasi ke user (Thread-safe-ish via bot API)
+                        # Kirim notifikasi ke user dengan throttle (hindari 429 rate limit)
+                        # Telegram limit ~30 msg/detik, kita jaga minimal 0.5 detik antar pesan
+                        with shared['msg_lock']:
+                            gap = time.time() - shared['last_msg_time']
+                            if gap < 0.5:
+                                time.sleep(0.5 - gap)
+                            shared['last_msg_time'] = time.time()
                         try:
                             m = bot.send_message(chat_id, format_order_message([order], "", country_key, start_index=shared['order_counter'], show_progress=False), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup().row(InlineKeyboardButton("⏳ Wait...", callback_data="cancel_wait")))
                             if chat_id not in active_orders: active_orders[chat_id] = {}
                             active_orders[chat_id][m.message_id] = [order]
                             threading.Thread(target=auto_check_otp, args=(chat_id, m.message_id, [order], api_key, country_key, True, shared['order_counter']), daemon=True).start()
-                        except: pass
+                        except Exception as e:
+                            print(f"[AUTOBUY] Gagal kirim notif: {e}")
                     
-                    # Minim jeda jika dapat nomor
-                    time.sleep(0.01)
+                    # Jeda jika dapat nomor
+                    time.sleep(0.05)
                     
                 elif res == 'NO_BALANCE':
                     autobuy_active[chat_id] = False
@@ -1216,14 +1225,13 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
                     break
                     
                 elif res == 'NO_NUMBERS':
-                    # MEGA BRUTAL: No sleep in short bursts
-                    if shared['attempts'] % 100 == 0:
-                        time.sleep(0.01)
-                    pass
+                    # Jeda kecil supaya tidak spam API SMSBower
+                    time.sleep(0.3)
                 else:
-                    time.sleep(0.1)
-            except:
-                time.sleep(0.2)
+                    time.sleep(0.3)
+            except Exception as e:
+                print(f"[AUTOBUY] hunter error: {e}")
+                time.sleep(0.3)
                 
     # Launch hunters
     for _ in range(NUM_WORKERS):
@@ -1376,4 +1384,18 @@ if __name__ == '__main__':
     init_db()
     print("SMSBower Bot is running... (LOCKED MODE)")
     print(f"Admin ID: {ADMIN_ID}")
-    bot.infinity_polling()
+
+    # Hapus webhook & buang update lama supaya tidak konflik (409)
+    try:
+        bot.remove_webhook()
+        time.sleep(1)
+    except Exception as e:
+        print(f"remove_webhook error: {e}")
+
+    # Loop polling yang tahan banting terhadap error 409/jaringan
+    while True:
+        try:
+            bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=30)
+        except Exception as e:
+            print(f"[POLLING ERROR] {e} — restart dalam 15 detik...")
+            time.sleep(15)
