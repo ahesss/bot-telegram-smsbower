@@ -277,10 +277,16 @@ def req_api(api_key, action, **kwargs):
     params.update(kwargs)
     try:
         # Pindah ke http_session untuk kecepatan tembak (Persistent Connections)
-        # Timeout dikurangi menjadi 5 detik untuk 'War Mode'
-        r = http_session.get(API_BASE, params=params, timeout=5)
+        r = http_session.get(API_BASE, params=params, timeout=8)
         return r.text.strip()
+    except requests.exceptions.Timeout:
+        print(f"[API TIMEOUT] action={action} params={kwargs}")
+        return "ERR_TIMEOUT"
+    except requests.exceptions.ConnectionError as e:
+        print(f"[API CONN_ERR] action={action}: {e}")
+        return "ERR_CONNECTION"
     except Exception as e:
+        print(f"[API ERROR] action={action}: {e}")
         return f"ERR_HTTP: {str(e)}"
 
 def strip_country_code(number, country_code="84"):
@@ -408,14 +414,39 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
             for o in orders:
                 if o['status'] != 'waiting':
                     continue
-                try:
+                MAX_RETRIES = 3
+                for attempt in range(MAX_RETRIES):
                     res = req_api(api_key, 'getStatus', id=o['id'])
+                    
+                    # Jika error koneksi/timeout, retry
+                    if res.startswith('ERR_'):
+                        print(f"[OTP CHECK] Order {o['id']} attempt {attempt+1} failed: {res}")
+                        if attempt < MAX_RETRIES - 1:
+                            time.sleep(1)
+                            continue
+                        else:
+                            print(f"[OTP CHECK] Order {o['id']} semua retry gagal, skip cycle ini")
+                            break
+                    
+                    # Parse response berhasil
                     if res.startswith('STATUS_OK'):
-                        # Gunakan [-1] agar selalu ambil bagian terakhir (kode OTP)
-                        code = res.split(':')[-1] if ':' in res else '???'
+                        # Format: STATUS_OK:CODE atau STATUS_OK:kode_otp
+                        parts = res.split(':')
+                        if len(parts) >= 2:
+                            # Ambil semua setelah STATUS_OK sebagai code
+                            code = parts[-1] if len(parts) > 2 else parts[1]
+                        else:
+                            code = '???'
+                        
+                        # Pastikan code bukan kosong
+                        code = code.strip()
+                        if not code:
+                            code = '???'
+                        
                         o['status'] = 'got_otp'
                         o['code'] = code
                         changed = True
+                        print(f"[OTP OK] Order {o['id']} -> Code: {code}")
                         try:
                             req_api(api_key, 'setStatus', status='6', id=o['id'])
                         except:
@@ -423,9 +454,29 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                     elif res == 'STATUS_CANCEL':
                         o['status'] = 'cancelled'
                         changed = True
-                except:
-                    pass
-                time.sleep(0.3)
+                        print(f"[OTP CANCEL] Order {o['id']} dibatalkan oleh provider")
+                    elif res == 'STATUS_WAIT_CODE':
+                        # Masih menunggu OTP - ini normal
+                        pass
+                    elif res.startswith('STATUS_WAIT_RETRY'):
+                        # Ada OTP sebelumnya, tapi request retry
+                        # Format: STATUS_WAIT_RETRY:lastcode
+                        parts = res.split(':')
+                        if len(parts) >= 2 and parts[1].strip():
+                            code = parts[1].strip()
+                            o['status'] = 'got_otp'
+                            o['code'] = code
+                            changed = True
+                            print(f"[OTP RETRY] Order {o['id']} -> Code from retry: {code}")
+                            try:
+                                req_api(api_key, 'setStatus', status='6', id=o['id'])
+                            except:
+                                pass
+                    else:
+                        print(f"[OTP UNKNOWN] Order {o['id']} response: {res}")
+                    break  # Berhasil dapat response, keluar dari retry loop
+                    
+                time.sleep(0.5)
 
             now = time.time()
             # Update timer setiap 7 detik agar tidak "macet" di layar
@@ -462,8 +513,8 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                         last_edit_time = now
                         last_timer_update = now
 
-            # Jeda antar pengecekan dipercepat untuk mode Brutal
-            time.sleep(2) 
+            # Jeda antar pengecekan — stabil 3 detik
+            time.sleep(CHECK_INTERVAL) 
 
     except Exception as e:
         print(f"Auto-check OTP thread error: {e}")
@@ -1226,20 +1277,8 @@ def autobuy_worker(chat_id, api_key, country_key="vietnam"):
 
     autobuy_active[chat_id] = False
     if status_msg:
-        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\nTotal: {len(shared['orders_list'])} Nomor", chat_id, status_msg.message_id)
-        except: pass
-
-    autobuy_active[chat_id] = False
-    if status_msg:
-        el = int(time.time() - start_time)
-        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\n\n🎯 Total dapat: `{len(orders_list)}` nomor\n🔄 Total percobaan: `{attempts}`x\n⏱ Durasi: {el//60}m {el%60}s", chat_id, status_msg.message_id, parse_mode="Markdown")
-        except: pass
-
-    autobuy_active[chat_id] = False
-    if status_msg:
-        elapsed_m = int((time.time() - start_time) // 60)
-        elapsed_s = int((time.time() - start_time) % 60)
-        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\n\n🎯 Total dapat: `{len(orders_list)}` nomor\n🔄 Total percobaan: `{attempts}`x\n⏱ Durasi: {elapsed_m}m {elapsed_s}s", chat_id, status_msg.message_id, parse_mode="Markdown")
+        el = int(time.time() - shared['start_time'])
+        try: bot.edit_message_text(f"🛑 *AUTO BUY SELESAI*\n\n🎯 Total dapat: `{len(shared['orders_list'])}` nomor\n🔄 Total percobaan: `{shared['attempts']}`x\n⏱ Durasi: {el//60}m {el%60}s", chat_id, status_msg.message_id, parse_mode="Markdown")
         except: pass
 
 @bot.message_handler(commands=['autobuy'])
@@ -1276,6 +1315,65 @@ def stopauto_cmd(message):
         bot.reply_to(message, "🛑 Menghentikan pencarian otomatis...")
     else:
         bot.reply_to(message, "⚠️ Tidak ada auto buy yang berjalan.")
+
+@bot.message_handler(commands=['cancelall'])
+def cancelall_cmd(message):
+    """Cancel semua order yang sedang menunggu OTP sekaligus"""
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    
+    if not is_whitelisted(user_id):
+        bot.reply_to(message, f"🔒 *Akses Ditolak*\nID Telegram Anda: `{user_id}`", parse_mode="Markdown")
+        return
+    
+    api_key = get_user_api(user_id)
+    if not api_key:
+        bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
+        return
+    
+    # Kumpulkan semua order yang masih waiting dari active_orders
+    if chat_id not in active_orders or not active_orders[chat_id]:
+        bot.reply_to(message, "⚠️ Tidak ada order aktif yang bisa dibatalkan.")
+        return
+    
+    waiting_orders = []
+    for msg_id, orders in active_orders[chat_id].items():
+        for o in orders:
+            if o['status'] == 'waiting':
+                waiting_orders.append(o)
+    
+    if not waiting_orders:
+        bot.reply_to(message, "⚠️ Tidak ada order yang sedang menunggu OTP.")
+        return
+    
+    # Cancel semua sekaligus
+    processing = bot.reply_to(message, f"⏳ Membatalkan {len(waiting_orders)} order...")
+    
+    cancelled = 0
+    failed = 0
+    for o in waiting_orders:
+        try:
+            res = req_api(api_key, 'setStatus', status='8', id=o['id'])
+            if 'ACCESS_CANCEL' in res:
+                o['status'] = 'cancelled'
+                cancelled += 1
+            else:
+                failed += 1
+                print(f"[CANCELALL] Order {o['id']} gagal: {res}")
+        except Exception as e:
+            failed += 1
+            print(f"[CANCELALL] Order {o['id']} error: {e}")
+        time.sleep(0.2)
+    
+    result = f"🚫 *Cancel All Selesai*\n\n✅ Berhasil dibatalkan: *{cancelled}*"
+    if failed > 0:
+        result += f"\n❌ Gagal: *{failed}*"
+    result += "\n\n💰 Saldo dari order yang dibatalkan dikembalikan otomatis."
+    
+    try:
+        bot.edit_message_text(result, chat_id, processing.message_id, parse_mode="Markdown")
+    except:
+        bot.reply_to(message, result, parse_mode="Markdown")
 
 @bot.message_handler(func=lambda message: True)
 def catch_all(message):
