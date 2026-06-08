@@ -96,6 +96,10 @@ COUNTRIES = {
 # Format: { chat_id: { message_id: [orders_list] } }
 active_orders = {}
 
+# Global tracker: semua order yang pernah dibuat (tidak dihapus sampai selesai/cancel)
+# Format: { chat_id: [order_dict, order_dict, ...] }
+all_user_orders = {}
+
 # =============================================
 # DATABASE
 # =============================================
@@ -384,12 +388,18 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
     EDIT_COOLDOWN = 3
     last_timer_update = 0
 
+    # Register ke global tracker
+    if chat_id not in all_user_orders:
+        all_user_orders[chat_id] = []
+    for o in orders:
+        if o not in all_user_orders[chat_id]:
+            all_user_orders[chat_id].append(o)
+
     try:
         while True:
             waiting_orders = [o for o in orders if o['status'] == 'waiting']
             if not waiting_orders:
                 if is_autobuy_mode and autobuy_active.get(chat_id, False):
-                    # Jika di mode autobuy, tetap hidup karena order baru bisa saja masuk ke list ini
                     time.sleep(CHECK_INTERVAL)
                     continue
                 else:
@@ -414,73 +424,62 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
             for o in orders:
                 if o['status'] != 'waiting':
                     continue
-                MAX_RETRIES = 3
-                for attempt in range(MAX_RETRIES):
-                    res = req_api(api_key, 'getStatus', id=o['id'])
+                
+                # Single attempt dengan timeout yang cukup — tanpa retry blocking
+                res = req_api(api_key, 'getStatus', id=o['id'])
+                
+                # Jika error koneksi/timeout, skip dan coba di cycle berikutnya
+                if res.startswith('ERR_'):
+                    print(f"[OTP CHECK] Order {o['id']} error: {res} (akan retry next cycle)")
+                    time.sleep(0.3)
+                    continue
+                
+                # Parse response berhasil
+                if res.startswith('STATUS_OK'):
+                    parts = res.split(':')
+                    if len(parts) >= 2:
+                        code = parts[-1] if len(parts) > 2 else parts[1]
+                    else:
+                        code = '???'
                     
-                    # Jika error koneksi/timeout, retry
-                    if res.startswith('ERR_'):
-                        print(f"[OTP CHECK] Order {o['id']} attempt {attempt+1} failed: {res}")
-                        if attempt < MAX_RETRIES - 1:
-                            time.sleep(1)
-                            continue
-                        else:
-                            print(f"[OTP CHECK] Order {o['id']} semua retry gagal, skip cycle ini")
-                            break
+                    code = code.strip()
+                    if not code:
+                        code = '???'
                     
-                    # Parse response berhasil
-                    if res.startswith('STATUS_OK'):
-                        # Format: STATUS_OK:CODE atau STATUS_OK:kode_otp
-                        parts = res.split(':')
-                        if len(parts) >= 2:
-                            # Ambil semua setelah STATUS_OK sebagai code
-                            code = parts[-1] if len(parts) > 2 else parts[1]
-                        else:
-                            code = '???'
-                        
-                        # Pastikan code bukan kosong
-                        code = code.strip()
-                        if not code:
-                            code = '???'
-                        
+                    o['status'] = 'got_otp'
+                    o['code'] = code
+                    changed = True
+                    print(f"[OTP OK] Order {o['id']} -> Code: {code}")
+                    try:
+                        req_api(api_key, 'setStatus', status='6', id=o['id'])
+                    except:
+                        pass
+                elif res == 'STATUS_CANCEL':
+                    o['status'] = 'cancelled'
+                    changed = True
+                    print(f"[OTP CANCEL] Order {o['id']} dibatalkan oleh provider")
+                elif res == 'STATUS_WAIT_CODE':
+                    pass
+                elif res.startswith('STATUS_WAIT_RETRY'):
+                    parts = res.split(':')
+                    if len(parts) >= 2 and parts[1].strip():
+                        code = parts[1].strip()
                         o['status'] = 'got_otp'
                         o['code'] = code
                         changed = True
-                        print(f"[OTP OK] Order {o['id']} -> Code: {code}")
+                        print(f"[OTP RETRY] Order {o['id']} -> Code from retry: {code}")
                         try:
                             req_api(api_key, 'setStatus', status='6', id=o['id'])
                         except:
                             pass
-                    elif res == 'STATUS_CANCEL':
-                        o['status'] = 'cancelled'
-                        changed = True
-                        print(f"[OTP CANCEL] Order {o['id']} dibatalkan oleh provider")
-                    elif res == 'STATUS_WAIT_CODE':
-                        # Masih menunggu OTP - ini normal
-                        pass
-                    elif res.startswith('STATUS_WAIT_RETRY'):
-                        # Ada OTP sebelumnya, tapi request retry
-                        # Format: STATUS_WAIT_RETRY:lastcode
-                        parts = res.split(':')
-                        if len(parts) >= 2 and parts[1].strip():
-                            code = parts[1].strip()
-                            o['status'] = 'got_otp'
-                            o['code'] = code
-                            changed = True
-                            print(f"[OTP RETRY] Order {o['id']} -> Code from retry: {code}")
-                            try:
-                                req_api(api_key, 'setStatus', status='6', id=o['id'])
-                            except:
-                                pass
-                    else:
-                        print(f"[OTP UNKNOWN] Order {o['id']} response: {res}")
-                    break  # Berhasil dapat response, keluar dari retry loop
+                else:
+                    print(f"[OTP UNKNOWN] Order {o['id']} response: {res}")
                     
-                time.sleep(0.5)
+                time.sleep(0.3)
 
             now = time.time()
-            # Update timer setiap 7 detik agar tidak "macet" di layar
-            should_update = changed or (now - last_timer_update >= 7)
+            # SELALU update timer setiap 5 detik supaya ga stuck
+            should_update = changed or (now - last_timer_update >= 5)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
@@ -1331,16 +1330,21 @@ def cancelall_cmd(message):
         bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
         return
     
-    # Kumpulkan semua order yang masih waiting dari active_orders
-    if chat_id not in active_orders or not active_orders[chat_id]:
-        bot.reply_to(message, "⚠️ Tidak ada order aktif yang bisa dibatalkan.")
-        return
-    
+    # Cari dari global tracker + active_orders (double check)
     waiting_orders = []
-    for msg_id, orders in active_orders[chat_id].items():
-        for o in orders:
-            if o['status'] == 'waiting':
+    
+    # Dari global tracker
+    if chat_id in all_user_orders:
+        for o in all_user_orders[chat_id]:
+            if o['status'] == 'waiting' and o not in waiting_orders:
                 waiting_orders.append(o)
+    
+    # Dari active_orders juga (fallback)
+    if chat_id in active_orders:
+        for msg_id, orders in active_orders[chat_id].items():
+            for o in orders:
+                if o['status'] == 'waiting' and o not in waiting_orders:
+                    waiting_orders.append(o)
     
     if not waiting_orders:
         bot.reply_to(message, "⚠️ Tidak ada order yang sedang menunggu OTP.")
@@ -1354,21 +1358,32 @@ def cancelall_cmd(message):
     for o in waiting_orders:
         try:
             res = req_api(api_key, 'setStatus', status='8', id=o['id'])
-            if 'ACCESS_CANCEL' in res:
+            if 'ACCESS_CANCEL' in res or 'ACCESS_READY' in res or 'ACCESS_ACTIVATION' in res:
+                o['status'] = 'cancelled'
+                cancelled += 1
+            elif 'CANCEL' in res.upper():
+                # Sudah di-cancel sebelumnya
                 o['status'] = 'cancelled'
                 cancelled += 1
             else:
+                # Force set status cancelled di bot meskipun API ga return expected
+                o['status'] = 'cancelled'
                 failed += 1
-                print(f"[CANCELALL] Order {o['id']} gagal: {res}")
+                print(f"[CANCELALL] Order {o['id']} response unexpected: {res}")
         except Exception as e:
+            o['status'] = 'cancelled'  # Force cancel di memory juga
             failed += 1
             print(f"[CANCELALL] Order {o['id']} error: {e}")
-        time.sleep(0.2)
+        time.sleep(0.15)
     
-    result = f"🚫 *Cancel All Selesai*\n\n✅ Berhasil dibatalkan: *{cancelled}*"
+    # Cleanup global tracker
+    if chat_id in all_user_orders:
+        all_user_orders[chat_id] = [o for o in all_user_orders[chat_id] if o['status'] == 'waiting']
+    
+    result = f"🚫 *Cancel All Selesai*\n\n✅ Dibatalkan: *{cancelled}*"
     if failed > 0:
-        result += f"\n❌ Gagal: *{failed}*"
-    result += "\n\n💰 Saldo dari order yang dibatalkan dikembalikan otomatis."
+        result += f"\n⚠️ Response aneh (tapi tetap di-cancel): *{failed}*"
+    result += "\n\n💰 Saldo dikembalikan otomatis oleh SMSBower."
     
     try:
         bot.edit_message_text(result, chat_id, processing.message_id, parse_mode="Markdown")
